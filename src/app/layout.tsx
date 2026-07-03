@@ -60,9 +60,9 @@ export default function RootLayout({
       </head>
       <body suppressHydrationWarning>
         <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
-          <div className="app-layout" style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
+          <div className="app-layout">
             <TopNav />
-            <div style={{ display: 'flex', flex: 1, minHeight: 0, width: '100%' }}>
+            <div className="app-body">
               <main className="app-main">
                 {children}
               </main>
