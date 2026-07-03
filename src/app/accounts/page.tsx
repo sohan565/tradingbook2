@@ -7,7 +7,10 @@ import styles from './accounts.module.css';
 export default function AccountsPage() {
   const [mounted, setMounted] = useState<boolean>(false);
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const [accounts, setAccounts] = useState<MTAccount[]>([]);
@@ -42,7 +45,10 @@ export default function AccountsPage() {
   };
 
   useEffect(() => {
-    fetchAccounts();
+    const timer = setTimeout(() => {
+      fetchAccounts();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Show a notification toast

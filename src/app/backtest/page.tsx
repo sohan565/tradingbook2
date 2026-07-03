@@ -148,8 +148,11 @@ export default function BacktestPage() {
   };
 
   useEffect(() => {
-    setMounted(true);
-    fetchSessions();
+    const timer = setTimeout(() => {
+      setMounted(true);
+      fetchSessions();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // ---- WIZARD STATE (Setup Mode) ----
@@ -479,7 +482,6 @@ export default function BacktestPage() {
 
     try {
       let candles: CandleData[] = [];
-      const tfConf = TIMEFRAMES.find(t => t.key === timeframe) || TIMEFRAMES[2];
 
       if (dataSource === 'server') {
         // Fetch from server API
@@ -951,7 +953,6 @@ export default function BacktestPage() {
       ? visibleCandlesRef.current[visibleCandlesRef.current.length - 1].time
       : 0;
 
-    const tfConf = TIMEFRAMES.find(t => t.key === newTf)!;
     let newCandles: CandleData[] = [];
 
     setIsLoading(true);
@@ -1054,26 +1055,30 @@ export default function BacktestPage() {
 
   // Sync positions live price updates when visible candles change
   useEffect(() => {
-    if (visibleCandles.length === 0 || openPositions.length === 0) return;
+    if (visibleCandles.length === 0 || openPositionsRef.current.length === 0) return;
     const currentClose = visibleCandles[visibleCandles.length - 1].close;
 
-    setOpenPositions(prev =>
-      prev.map(pos => {
-        const { pnl, pips } = calculateUnrealizedPnL(
-          pos.entryPrice,
-          currentClose,
-          pos.lotSize,
-          pos.type,
-          pos.symbol
-        );
-        return {
-          ...pos,
-          currentPrice: currentClose,
-          unrealizedPnl: pnl,
-          unrealizedPips: pips,
-        };
-      })
-    );
+    const timer = setTimeout(() => {
+      setOpenPositions(prev => {
+        if (prev.length === 0) return prev;
+        return prev.map(pos => {
+          const { pnl, pips } = calculateUnrealizedPnL(
+            pos.entryPrice,
+            currentClose,
+            pos.lotSize,
+            pos.type,
+            pos.symbol
+          );
+          return {
+            ...pos,
+            currentPrice: currentClose,
+            unrealizedPnl: pnl,
+            unrealizedPips: pips,
+          };
+        });
+      });
+    }, 0);
+    return () => clearTimeout(timer);
   }, [visibleCandles.length]);
 
   // Execute Step Forward
@@ -1244,6 +1249,23 @@ export default function BacktestPage() {
   }, [isPlaying, speed, stepForward]);
 
 
+  // Reset backtest session
+  const handleReset = () => {
+    setIsPlaying(false);
+    if (allCandles.length > 0) {
+      const resetIndex = getInitialReplayIndex(allCandles);
+      const resetVisible = allCandles.slice(0, resetIndex + 1);
+      setVisibleCandles(resetVisible);
+      setCurrentIndex(resetIndex);
+      setBalance(startingBalance);
+      setOpenPositions([]);
+      setClosedTrades([]);
+      setMarkers([]);
+      
+      autoSave(startingBalance, resetIndex, [], [], timeframe, []);
+    }
+  };
+
   // Keyboard Shortcuts handler
   useEffect(() => {
     if (sessionStatus !== 'active') return;
@@ -1277,28 +1299,11 @@ export default function BacktestPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stepForward, sessionStatus, handleUndo, handleRedo]);
+  }, [stepForward, sessionStatus, handleUndo, handleRedo, handleReset]);
 
   // Play/Pause toggler
   const handleTogglePlay = () => {
     setIsPlaying(!isPlaying);
-  };
-
-  // Reset backtest session
-  const handleReset = () => {
-    setIsPlaying(false);
-    if (allCandles.length > 0) {
-      const resetIndex = getInitialReplayIndex(allCandles);
-      const resetVisible = allCandles.slice(0, resetIndex + 1);
-      setVisibleCandles(resetVisible);
-      setCurrentIndex(resetIndex);
-      setBalance(startingBalance);
-      setOpenPositions([]);
-      setClosedTrades([]);
-      setMarkers([]);
-      
-      autoSave(startingBalance, 49, [], [], timeframe, []);
-    }
   };
 
   // Place Trade Order

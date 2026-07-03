@@ -6,7 +6,7 @@
  * =====================================================
  */
 
-import type { CandleData, Timeframe } from '@/types';
+import type { CandleData } from '@/types';
 
 /**
  * Validates a single candle for chart rendering

@@ -393,8 +393,23 @@ const DEMO_TRADES: TradeWithMood[] = [
 export default function AnalyticsPage() {
   const [mounted, setMounted] = useState<boolean>(false);
   useEffect(() => {
-    setMounted(true);
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
+  // Filters State
+  const [timeRange, setTimeRange] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [symbolFilter, setSymbolFilter] = useState<string>('all');
+
+  const [nowSec, setNowSec] = useState<number>(0);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setNowSec(Math.floor(Date.now() / 1000));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [timeRange]);
 
   const [trades, setTrades] = useState<TradeWithMood[]>([]);
   const [backtestSessions, setBacktestSessions] = useState<any[]>([]);
@@ -404,11 +419,6 @@ export default function AnalyticsPage() {
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
-
-  // Filters State
-  const [timeRange, setTimeRange] = useState<string>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
-  const [symbolFilter, setSymbolFilter] = useState<string>('all');
 
   // Calendar View State
   const [calendarYear, setCalendarYear] = useState<number>(new Date().getFullYear());
@@ -504,7 +514,10 @@ export default function AnalyticsPage() {
   };
 
   useEffect(() => {
-    loadTrades();
+    const timer = setTimeout(() => {
+      loadTrades();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Handle manual toggle of demo mode
@@ -544,12 +557,11 @@ export default function AnalyticsPage() {
     }
 
     // Time Range Filter
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (timeRange === '7d') {
+    if (timeRange === '7d' && nowSec > 0) {
       result = result.filter((t) => (t.exitTime || t.entryTime) >= nowSec - 7 * 86400);
-    } else if (timeRange === '30d') {
+    } else if (timeRange === '30d' && nowSec > 0) {
       result = result.filter((t) => (t.exitTime || t.entryTime) >= nowSec - 30 * 86400);
-    } else if (timeRange === '90d') {
+    } else if (timeRange === '90d' && nowSec > 0) {
       result = result.filter((t) => (t.exitTime || t.entryTime) >= nowSec - 90 * 86400);
     } else if (timeRange === 'mtd') {
       const startOfMonth = new Date();
@@ -659,8 +671,11 @@ export default function AnalyticsPage() {
 
   // Clear AI insights when filters change
   useEffect(() => {
-    setAiInsights(null);
-    setChatMessages([]);
+    const timer = setTimeout(() => {
+      setAiInsights(null);
+      setChatMessages([]);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [sourceFilter, symbolFilter, timeRange]);
 
   // Scroll chat window to bottom
@@ -1056,8 +1071,11 @@ export default function AnalyticsPage() {
     if (filteredTrades.length > 0) {
       const lastTrade = filteredTrades[filteredTrades.length - 1];
       const lastTradeDate = new Date((lastTrade.exitTime || lastTrade.entryTime) * 1000);
-      setCalendarYear(lastTradeDate.getUTCFullYear());
-      setCalendarMonth(lastTradeDate.getUTCMonth());
+      const timer = setTimeout(() => {
+        setCalendarYear(lastTradeDate.getUTCFullYear());
+        setCalendarMonth(lastTradeDate.getUTCMonth());
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [filteredTrades]);
 

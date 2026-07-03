@@ -18,11 +18,6 @@ export async function POST(req: NextRequest) {
     // Resolve CSV path
     let absoluteCsvPath = csvPath;
     if (!path.isAbsolute(csvPath)) {
-      absoluteCsvPath = path.resolve(process.cwd(), '..', csvPath);
-    }
-
-    // Fallback search in working dir if not found relative to next app
-    if (!fs.existsSync(absoluteCsvPath)) {
       absoluteCsvPath = path.resolve(process.cwd(), csvPath);
     }
 
@@ -34,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve backtester.py path
-    const scriptPath = path.resolve(process.cwd(), '..', 'backtester.py');
+    const scriptPath = path.resolve(process.cwd(), 'backtester.py');
 
     // Command arguments for headless python aggregator
     const pyArgs = [

@@ -120,6 +120,8 @@ function detectDelimiter(sample: string): Delimiter {
 
 // ---------- Single-Line Parsing ----------
 
+// parseLine was commented out because it is not used in the streaming or bulk CSV parsers.
+/*
 function parseLine(line: string, delimiter: Delimiter): CandleData | null {
   const trimmed = line.trim();
   if (trimmed.length === 0) return null;
@@ -173,6 +175,7 @@ function parseLine(line: string, delimiter: Delimiter): CandleData | null {
     volume: isNaN(volume) ? 0 : volume,
   };
 }
+*/
 
 // ---------- Public API ----------
 
@@ -215,7 +218,6 @@ export function parseHistDataCSVStream(lines: string[], timezoneOffsetMinutes: n
   if (parts.length >= 7 && part1IsTime) {
     separateColumns = true;
     const datePart = parts[0];
-    const timePart = parts[1];
     if (datePart.includes('.')) {
       parseDateFn = (d, t) => {
         if (d.length < 10 || !t || t.length < 5) return null;

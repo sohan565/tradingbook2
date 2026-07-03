@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { IDrawing, Anchor } from 'lightweight-charts-drawing';
 import styles from './DrawingControls.module.css';
 
 // Pre-defined color palette matching TradingBook dark neon theme
@@ -358,6 +357,8 @@ export const DrawingFloatingToolbar: React.FC<FloatingToolbarProps> = ({
 // ============================================================================
 // 3. SETTINGS MODAL DIALOG
 // ============================================================================
+const ALL_TIMEFRAMES = ['1m', '5m', '15m', '30m', '1H', '4H', '1D'];
+
 interface SettingsModalProps {
   isOpen: boolean;
   drawing: any;
@@ -391,26 +392,28 @@ export const DrawingSettingsModal: React.FC<SettingsModalProps> = ({
   const [visible, setVisible] = useState(drawing.options?.visible !== false);
 
   // Timeframe visibility list
-  const allTimeframes = ['1m', '5m', '15m', '30m', '1H', '4H', '1D'];
   const [visibleTimeframes, setVisibleTimeframes] = useState<string[]>(
-    drawing.options?.visibleTimeframes || allTimeframes
+    drawing.options?.visibleTimeframes || ALL_TIMEFRAMES
   );
 
   // Sync state values when drawing changes
   useEffect(() => {
     if (drawing) {
-      setLineColor(drawing.style?.lineColor || '#00e5ff');
-      setLineWidth(drawing.style?.lineWidth || 1);
-      setLineStyle(getLineStyleLabel(drawing.style?.lineDash));
-      setFillColor(drawing.style?.fillColor || '#00e5ff');
-      setFillOpacity(drawing.style?.fillOpacity !== undefined ? drawing.style.fillOpacity : 0.2);
-      setShowLabels(!!drawing.style?.showLabels);
-      setTextVal(drawing.options?.text || drawing.style?.text || '');
-      setFontSize(drawing.options?.fontSize || 12);
-      setFontWeight(drawing.options?.fontWeight || 'normal');
-      setLocked(!!drawing.options?.locked);
-      setVisible(drawing.options?.visible !== false);
-      setVisibleTimeframes(drawing.options?.visibleTimeframes || allTimeframes);
+      const timer = setTimeout(() => {
+        setLineColor(drawing.style?.lineColor || '#00e5ff');
+        setLineWidth(drawing.style?.lineWidth || 1);
+        setLineStyle(getLineStyleLabel(drawing.style?.lineDash));
+        setFillColor(drawing.style?.fillColor || '#00e5ff');
+        setFillOpacity(drawing.style?.fillOpacity !== undefined ? drawing.style.fillOpacity : 0.2);
+        setShowLabels(!!drawing.style?.showLabels);
+        setTextVal(drawing.options?.text || drawing.style?.text || '');
+        setFontSize(drawing.options?.fontSize || 12);
+        setFontWeight(drawing.options?.fontWeight || 'normal');
+        setLocked(!!drawing.options?.locked);
+        setVisible(drawing.options?.visible !== false);
+        setVisibleTimeframes(drawing.options?.visibleTimeframes || ALL_TIMEFRAMES);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [drawing]);
 
@@ -668,7 +671,7 @@ export const DrawingSettingsModal: React.FC<SettingsModalProps> = ({
                 Show drawing on active timeframes:
               </p>
               <div className={styles.visibilityGrid}>
-                {allTimeframes.map((tf) => (
+                {ALL_TIMEFRAMES.map((tf) => (
                   <label key={tf} className={styles.visibilityItem}>
                     <input
                       type="checkbox"

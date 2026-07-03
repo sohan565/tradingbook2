@@ -20,6 +20,7 @@ import type {
 } from 'lightweight-charts';
 import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay } from '@/types';
 import styles from './Chart.module.css';
+import { computeHeikinAshi } from '@/lib/heikin-ashi';
 
 // Import Drawing tools from lightweight-charts-drawing
 import {
@@ -159,7 +160,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   candles,
   markers = [],
   positions = [],
-  symbol,
+  symbol: _symbol,
   onCrosshairMove,
   activeTool = null,
   drawings = [],
@@ -178,7 +179,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const [contextMenuState, setContextMenuState] = useState<{ x: number; y: number; drawingId: string } | null>(null);
   const [settingsModalId, setSettingsModalId] = useState<string | null>(null);
   const [toolbarPositionState, setToolbarPositionState] = useState<{ x: number; y: number }>({ x: 120, y: 15 });
-  const [renderTrigger, setRenderTrigger] = useState(0);
+  const [_renderTrigger, setRenderTrigger] = useState(0);
   const copiedDrawingRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -193,7 +194,6 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
   // References for Drawing Manager
   const drawingManagerRef = useRef<DrawingManager | null>(null);
-  const loadedDrawingsRef = useRef<boolean>(false);
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map());
 
   // Keep track of active price lines to clean them up properly
@@ -254,10 +254,11 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
   // Initialize Chart
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     // Create chart
-    const chart = createChart(containerRef.current, {
+    const chart = createChart(container, {
       layout: {
         background: { color: '#07080a' },
         textColor: '#94a3b8',
@@ -397,7 +398,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     // Initialize Drawing Manager
     const drawingManager = new DrawingManager();
     drawingManagerRef.current = drawingManager;
-    drawingManager.attach(chart, candleSeries, containerRef.current);
+    drawingManager.attach(chart, candleSeries, container);
 
     // lightweight-charts-drawing exposes tool selection but does not create
     // drawings from chart clicks. Bridge that missing interaction here using chart's mouse event subscription.
@@ -1014,14 +1015,14 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     };
 
     // Register event listeners
-    containerRef.current.addEventListener('mousedown', handleBodyMouseDown, true);
-    containerRef.current.addEventListener('mousemove', handleMouseMoveHover, true);
-    containerRef.current.addEventListener('contextmenu', handleContextMenu, true);
+    container.addEventListener('mousedown', handleBodyMouseDown, true);
+    container.addEventListener('mousemove', handleMouseMoveHover, true);
+    container.addEventListener('contextmenu', handleContextMenu, true);
     window.addEventListener('mousemove', handleBodyMouseMove, true);
     window.addEventListener('mouseup', handleBodyMouseUp, true);
 
     // Register double click listener
-    containerRef.current.addEventListener('dblclick', handleDblClick);
+    container.addEventListener('dblclick', handleDblClick);
 
     // Resize Observer to handle responsiveness
     const resizeObserver = new ResizeObserver((entries) => {
@@ -1029,14 +1030,14 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       const { width, height } = entries[0].contentRect;
       chart.resize(width, height);
     });
-    resizeObserver.observe(containerRef.current);
+    resizeObserver.observe(container);
 
     return () => {
-      if (containerRef.current) {
-        containerRef.current.removeEventListener('mousedown', handleBodyMouseDown, true);
-        containerRef.current.removeEventListener('mousemove', handleMouseMoveHover, true);
-        containerRef.current.removeEventListener('contextmenu', handleContextMenu, true);
-        containerRef.current.removeEventListener('dblclick', handleDblClick);
+      if (container) {
+        container.removeEventListener('mousedown', handleBodyMouseDown, true);
+        container.removeEventListener('mousemove', handleMouseMoveHover, true);
+        container.removeEventListener('contextmenu', handleContextMenu, true);
+        container.removeEventListener('dblclick', handleDblClick);
       }
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('mousemove', handleBodyMouseMove, true);
@@ -1366,7 +1367,6 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     // Convert CandleData to series format
     let chartCandles: any[];
     if (chartType === 'HeikinAshi') {
-      const { computeHeikinAshi } = require('@/lib/heikin-ashi');
       const haData = computeHeikinAshi(candles);
       chartCandles = haData.map((c: any) => ({
         time: c.time as UTCTimestamp,
