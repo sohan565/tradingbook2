@@ -1185,4 +1185,11 @@ button:hover svg {
     min-height: 100vh !important;
     overflow: visible !important;
   }
+
+  /* Disable heavy atmospheric glow overlays on mobile to maximize speed */
+  [data-theme='dark'] body::before,
+  [data-theme='dark'] body::after {
+    display: none !important;
+    animation: none !important;
+  }
 }
