@@ -73,7 +73,7 @@
   background: var(--accent);
   color: var(--text-primary);
   border-color: transparent;
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: var(--shadow-sm);
 }
 
 .activeFilter:hover {
@@ -82,8 +82,8 @@
 }
 
 .demoBanner {
-  background: linear-gradient(90deg, rgba(0, 229, 255, 0.08), rgba(139, 92, 246, 0.08));
-  border: 1px solid rgba(0, 229, 255, 0.2);
+  background: var(--accent-glow);
+  border: 1px solid var(--border-subtle);
   margin: 1.5rem 1.5rem 0 1.5rem;
   padding: 0.75rem 1.25rem;
   border-radius: var(--radius-lg);
@@ -143,16 +143,14 @@
 }
 
 .bentoCard {
-  background: rgba(13, 16, 37, 0.6);
+  background: var(--bg-input);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-xl);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  will-change: transform, backdrop-filter;
+  will-change: auto;
   transform: translate3d(0, 0, 0);
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
@@ -260,7 +258,7 @@
 }
 
 .chartContainer {
-  background: rgba(13, 16, 37, 0.4);
+  background: var(--bg-card);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-xl);
   padding: 1.5rem;
@@ -269,7 +267,6 @@
   gap: 1rem;
   min-height: 410px;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  backdrop-filter: blur(8px);
 }
 
 .chartTitle {
@@ -520,7 +517,6 @@
   position: relative;
   min-height: 52px;
   transition: all var(--t-fast);
-  backdrop-filter: blur(10px);
 }
 
 .calendarCell:hover {
@@ -544,15 +540,14 @@
 }
 
 .cellProfit {
-  background: rgba(0, 230, 118, 0.08);
-  border: 1px solid rgba(0, 230, 118, 0.2);
-  box-shadow: inset 0 0 10px rgba(0, 230, 118, 0.05);
+  background: var(--color-profit-bg);
+  border: 1px solid var(--border-profit);
 }
 
 .cellProfit:hover {
-  background: rgba(0, 230, 118, 0.14);
-  border-color: rgba(0, 230, 118, 0.35);
-  box-shadow: 0 0 12px var(--color-profit-glow);
+  background: var(--color-profit-bg);
+  border-color: var(--border-profit);
+  box-shadow: var(--shadow-sm);
 }
 
 .cellProfit .cellPnl {
@@ -560,15 +555,14 @@
 }
 
 .cellLoss {
-  background: rgba(255, 61, 0, 0.08);
-  border: 1px solid rgba(255, 61, 0, 0.2);
-  box-shadow: inset 0 0 10px rgba(255, 61, 0, 0.05);
+  background: var(--color-loss-bg);
+  border: 1px solid var(--border-loss);
 }
 
 .cellLoss:hover {
-  background: rgba(255, 61, 0, 0.14);
-  border-color: rgba(255, 61, 0, 0.35);
-  box-shadow: 0 0 12px var(--color-loss-glow);
+  background: var(--color-loss-bg);
+  border-color: var(--border-loss);
+  box-shadow: var(--shadow-sm);
 }
 
 .cellLoss .cellPnl {
@@ -594,8 +588,6 @@
   margin-top: 1.5rem;
   gap: 1.25rem;
   box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .emptyTitle {
@@ -614,7 +606,7 @@
 
 .emptyBtn {
   background: var(--accent-gradient);
-  color: #fff;
+  color: var(--text-primary);
   border: none;
   font-size: 0.8rem;
   font-weight: 700;
@@ -627,7 +619,7 @@
 
 .emptyBtn:hover {
   transform: translateY(-1px);
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-md);
 }
 
 /* ---------- Mobile Responsiveness ---------- */
@@ -706,8 +698,8 @@
 }
 
 .demoBadge {
-  background: linear-gradient(135deg, #7C4DFF, #6D5EF9);
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-primary);
   font-size: 0.7rem;
   font-weight: 800;
   padding: 0.3rem 0.75rem;
@@ -764,8 +756,8 @@
 }
 
 .emptyBtn {
-  background: linear-gradient(135deg, #7C4DFF, #6D5EF9, #2ED8FF);
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-primary);
   font-size: 0.88rem;
   font-weight: 800;
   padding: 0.7rem 2rem;
@@ -773,24 +765,23 @@
   border: none;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 20px rgba(109, 94, 249, 0.4);
+  box-shadow: var(--shadow-sm);
   margin-top: 0.5rem;
 }
 
 .emptyBtn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(109, 94, 249, 0.5);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ---------- AI COACH CARDS ---------- */
 .aiCoachCard {
-  background: rgba(13, 16, 37, 0.5);
-  border: 1px solid rgba(124, 77, 255, 0.2);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
   border-radius: 16px;
   padding: 1.5rem;
   margin-bottom: 1.5rem;
-  backdrop-filter: blur(16px);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -803,7 +794,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, #7C4DFF, #2ED8FF);
+  background: var(--accent);
   opacity: 0.8;
 }
 
@@ -822,13 +813,11 @@
   gap: 0.5rem;
   font-size: 1.1rem;
   font-weight: 800;
-  color: #fff;
+  color: var(--text-primary);
 }
 
 .aiCoachTitle span {
-  background: linear-gradient(135deg, #a78bfa 0%, #2ed8ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--accent);
 }
 
 .aiCoachDesc {
@@ -839,15 +828,15 @@
 }
 
 .generateBtn {
-  background: linear-gradient(135deg, #7C4DFF 0%, #6D5EF9 50%, #2ED8FF 100%);
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-primary);
   font-size: 0.8rem;
   font-weight: 700;
   padding: 0.5rem 1.25rem;
   border-radius: 8px;
   border: none;
   cursor: pointer;
-  box-shadow: 0 0 12px rgba(109, 94, 249, 0.3);
+  box-shadow: var(--shadow-sm);
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
@@ -856,7 +845,7 @@
 
 .generateBtn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 0 20px rgba(109, 94, 249, 0.5);
+  box-shadow: var(--shadow-sm);
 }
 
 .generateBtn:disabled {
@@ -873,7 +862,7 @@
 }
 
 .aiInsightsMarkdown {
-  background: rgba(8, 11, 18, 0.4);
+  background: var(--bg-secondary);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 10px;
   padding: 1.25rem;
@@ -900,7 +889,7 @@
   max-height: 450px;
   overflow-y: auto;
   padding: 1rem;
-  background: rgba(8, 11, 18, 0.3);
+  background: var(--bg-secondary);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: 12px;
   margin-bottom: 1rem;
@@ -918,10 +907,10 @@
 
 .userMsg {
   align-self: flex-end;
-  background: linear-gradient(135deg, #7C4DFF 0%, #6D5EF9 100%);
+  background: var(--accent);
   color: #ffffff;
   border-bottom-right-radius: 2px;
-  box-shadow: 0 4px 15px rgba(109, 94, 249, 0.35);
+  box-shadow: var(--shadow-sm);
 }
 
 .assistantMsg {
@@ -930,7 +919,6 @@
   color: var(--text-secondary);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-bottom-left-radius: 2px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .assistantMsg h4 {
@@ -945,7 +933,7 @@
 .chatInputRow {
   display: flex;
   gap: 0.6rem;
-  background: rgba(13, 16, 37, 0.6);
+  background: var(--bg-input);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   padding: 0.4rem;
@@ -958,7 +946,7 @@
   border: none;
   outline: none;
   padding: 0.5rem 0.75rem;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 0.85rem;
 }
 
@@ -967,8 +955,8 @@
 }
 
 .sendBtn {
-  background: linear-gradient(135deg, #7C4DFF 0%, #6D5EF9 100%);
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-primary);
   border: none;
   outline: none;
   font-weight: 700;
@@ -977,12 +965,12 @@
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 10px rgba(109, 94, 249, 0.3);
+  box-shadow: var(--shadow-sm);
 }
 
 .sendBtn:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 6px 15px rgba(109, 94, 249, 0.45);
+  box-shadow: var(--shadow-sm);
 }
 
 .sendBtn:disabled {

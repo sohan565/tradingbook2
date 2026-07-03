@@ -5,12 +5,10 @@
 /* --- 1. Context Menu (Floating Popup) --- */
 .contextMenu {
   position: absolute;
-  background: rgba(13, 17, 28, 0.95);
+  background: #16161b;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   padding: 4px 0;
   z-index: 10000;
   min-width: 170px;
@@ -73,7 +71,7 @@
   position: absolute;
   left: 100%;
   top: -4px;
-  background: rgba(13, 17, 28, 0.95);
+  background: #16161b;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -90,12 +88,10 @@
   position: absolute;
   display: flex;
   align-items: center;
-  background: rgba(13, 17, 28, 0.92);
+  background: #16161b;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 6px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
   padding: 4px 6px;
   z-index: 9999;
   gap: 2px;
@@ -146,7 +142,7 @@
 }
 
 .toolbarBtnActive {
-  background: rgba(0, 229, 255, 0.1);
+  background: rgba(125, 121, 242, 0.12);
   color: var(--accent, var(--accent-light));
 }
 
@@ -172,7 +168,7 @@
   left: 50%;
   transform: translateX(-50%);
   margin-top: 6px;
-  background: rgba(13, 17, 28, 0.98);
+  background: #17171d;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -219,7 +215,7 @@
   color: #f1f5f9;
 }
 .widthOptionActive {
-  background: rgba(0, 229, 255, 0.15);
+  background: rgba(125, 121, 242, 0.16);
   color: var(--accent, var(--accent-light));
   font-weight: bold;
 }
@@ -246,8 +242,6 @@
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -360,7 +354,7 @@
 }
 
 .modalInput {
-  background: #070913;
+  background: #101014;
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #f1f5f9;
   border-radius: 4px;
@@ -374,7 +368,7 @@
 }
 
 .modalSelect {
-  background: #070913;
+  background: #101014;
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #f1f5f9;
   border-radius: 4px;

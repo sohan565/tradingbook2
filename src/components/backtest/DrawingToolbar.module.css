@@ -51,8 +51,8 @@
   left: calc(100% + 8px);
   top: 50%;
   transform: translateY(-50%);
-  background: #1e2a3a;
-  color: #e2e8f0;
+  background: #1c1c22;
+  color: #f2f2f4;
   font-size: 0.72rem;
   font-weight: 600;
   padding: 4px 8px;
@@ -71,15 +71,15 @@
 }
 
 .activeTool {
-  background: rgba(99,102,241,0.15) !important;
-  border-color: rgba(99,102,241,0.3) !important;
-  color: #a5b4fc !important;
+  background: rgba(125, 121, 242, 0.16) !important;
+  border-color: rgba(125, 121, 242, 0.32) !important;
+  color: #8f8bf5 !important;
 }
 
 .activeMagnet {
-  background: rgba(0, 229, 255, 0.15) !important;
-  border-color: rgba(0, 229, 255, 0.3) !important;
-  color: var(--accent-light) !important;
+  background: rgba(224, 180, 80, 0.15) !important;
+  border-color: rgba(224, 180, 80, 0.32) !important;
+  color: #e0b450 !important;
 }
 
 .divider {
@@ -122,8 +122,8 @@
   left: calc(100% + 8px);
   top: 50%;
   transform: translateY(-50%);
-  background: #1e2a3a;
-  color: #e2e8f0;
+  background: #1c1c22;
+  color: #f2f2f4;
   font-size: 0.72rem;
   font-weight: 600;
   padding: 4px 8px;
@@ -174,8 +174,8 @@
   left: calc(100% + 8px);
   top: 50%;
   transform: translateY(-50%);
-  background: #1e2a3a;
-  color: #e2e8f0;
+  background: #1c1c22;
+  color: #f2f2f4;
   font-size: 0.72rem;
   font-weight: 600;
   padding: 4px 8px;
