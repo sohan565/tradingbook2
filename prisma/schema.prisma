@@ -1,0 +1,94 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TradeRecord {
+  id           String        @id @default(uuid())
+  symbol       String
+  type         String        // "BUY" or "SELL"
+  lotSize      Float
+  entryPrice   Float
+  entryTime    DateTime      // Entry time
+  exitPrice    Float?
+  exitTime     DateTime?
+  stopLoss     Float?
+  takeProfit   Float?
+  pnl          Float?        // Realized P&L in USD
+  pnlPips      Float?        // Realized P&L in pips
+  commission   Float         @default(0)
+  swap         Float         @default(0)
+  status       String        // "open" or "closed"
+  source       String        // "backtest", "mt5", "manual"
+  ticket       Int?          // MT5 Ticket number
+  magicNumber  Int?          // MT5 Magic number
+  comment      String?
+  notes        String?       // Markdown/RichText journal notes linked to this trade
+  tags         String[]      // Postgres supports native array of strings
+  screenshot   String?       // path or URL of manual upload / paste
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  
+  journalEntryId String?
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+}
+
+model JournalEntry {
+  id                String        @id @default(uuid())
+  date              String        @unique // Date String (YYYY-MM-DD) for daily entries
+  title             String?
+  content           String        // Rich Text / HTML
+  mood              String?       // "focused", "confident", "neutral", "anxious", "frustrated", "euphoric"
+  preSessionPlan    String?       // Pre-market plan notes
+  postSessionReview String?       // Post-market review notes
+  tags              String[]
+  screenshots       String[]
+  trades            TradeRecord[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+}
+
+model MTAccount {
+  id            String    @id @default(uuid())
+  platform      String    @default("MT5")
+  accountNumber String    @unique
+  broker        String
+  serverName    String?
+  apiKey        String    // unique API token for EA webhook auth
+  isActive      Boolean   @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model BacktestSession {
+  id             String   @id @default(uuid())
+  name           String
+  symbol         String
+  timeframe      String
+  dataSource     String   // "server" or "upload"
+  startDate      String?
+  endDate        String?
+  initialBalance Float
+  currentBalance Float
+  leverage       String
+  currentIndex   Int      @default(49)
+  
+  allCandles     Json     // CandleData[]
+  openPositions  Json     // OpenPosition[]
+  closedTrades   Json     // TradeRecord[]
+  markers        Json     // ChartMarker[]
+  drawings       Json?    // SerializedDrawing[]
+  activeIndicators Json?  // ActiveIndicator[]
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+

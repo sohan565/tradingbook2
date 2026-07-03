@@ -1,0 +1,471 @@
+.accountsContainer {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.contentArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  position: relative;
+}
+
+/* ---------- Top Control Bar ---------- */
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 1.5rem;
+  height: var(--navbar-height);
+  background: transparent;
+  border-bottom: none;
+  box-shadow: none;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.titleArea {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.titleText {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* ---------- Dashboard Workspace ---------- */
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  min-height: 0;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .topBar {
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem;
+    height: auto;
+  }
+  
+  .titleArea {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .workspace {
+    padding: 1rem;
+  }
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-height: 0;
+}
+
+.card {
+  background: rgba(13, 16, 37, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  will-change: transform, backdrop-filter;
+  transform: translate3d(0, 0, 0);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+.cardTitle {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Form Styles */
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inputLabel {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.inputField {
+  background: rgba(13, 16, 37, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  outline: none;
+  transition: all var(--t-fast);
+}
+
+.inputField:focus {
+  border-color: #6D5EF9;
+  background: rgba(13, 16, 37, 0.95);
+  box-shadow: 0 0 0 3px rgba(109, 94, 249, 0.15);
+}
+
+.registerBtn {
+  background: linear-gradient(135deg, #7C4DFF 0%, #6D5EF9 50%, #2ED8FF 100%);
+  color: #fff;
+  border: none;
+  padding: 0.85rem 1.25rem;
+  border-radius: var(--radius-full);
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  margin-top: 0.5rem;
+  box-shadow: 0 4px 20px rgba(109, 94, 249, 0.4);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.registerBtn:hover {
+  box-shadow: 0 4px 30px rgba(109, 94, 249, 0.55);
+  transform: translateY(-2px);
+}
+
+.registerBtn:active {
+  transform: scale(0.98);
+}
+
+/* Accounts List Grid */
+.accountsList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.accountCard {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: relative;
+  transition: all var(--t-normal);
+  box-shadow: var(--shadow-sm);
+}
+
+.accountCard:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-md);
+}
+
+.accountHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.accountInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.accountNum {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.platformPill {
+  font-size: 0.65rem;
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--accent-light);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  border: 1px solid rgba(0, 229, 255, 0.2);
+}
+
+.brokerName {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.syncIndicator {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 8px var(--color-profit-glow);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow: 0 0 16px var(--color-profit);
+    opacity: 1;
+  }
+}
+
+.activeDot {
+  width: 7px;
+  height: 7px;
+  background: var(--color-profit);
+  border-radius: 50%;
+  display: inline-block;
+  animation: pulseGlow 2s infinite ease-in-out;
+}
+
+.inactiveDot {
+  width: 7px;
+  height: 7px;
+  background: var(--color-loss);
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* API Key Copy Area (Recessed Cryptographic Panel) */
+.apiKeyBox {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.9rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.apiKeyLabel {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+}
+
+.apiKeyVal {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--accent-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.copyBtn {
+  background: rgba(0, 229, 255, 0.06);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  color: var(--accent-light);
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  font-family: var(--font-sans);
+}
+
+.copyBtn:hover {
+  background: var(--accent-gradient);
+  color: white;
+  border-color: transparent;
+  box-shadow: 0 2px 10px var(--accent-glow);
+}
+
+.accountActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 0.85rem;
+}
+
+.toggleSwitch {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkboxHidden {
+  display: none;
+}
+
+.deleteBtn {
+  background: rgba(255, 61, 0, 0.05);
+  border: 1px solid rgba(255, 61, 0, 0.15);
+  color: var(--color-loss);
+  padding: 0.4rem 1rem;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-fast);
+}
+
+.deleteBtn:hover {
+  background: var(--color-loss);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px var(--color-loss-glow);
+}
+
+/* Instructions layout (Neon Step Numbers) */
+.stepList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  margin-top: 0.5rem;
+}
+
+.stepItem {
+  display: flex;
+  gap: 0.85rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.stepNum {
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--accent-light);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.stepText {
+  flex: 1;
+}
+
+.stepText code {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 0.15rem 0.4rem;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-light);
+}
+
+.emptyState {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  border: 1px dashed var(--border-default);
+}
+
+/* Toast Success Alert overlay (Glassmorphic Toast) */
+.toastOverlay {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: rgba(0, 230, 118, 0.9);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgba(0, 230, 118, 0.3), 0 0 15px rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  z-index: 100;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

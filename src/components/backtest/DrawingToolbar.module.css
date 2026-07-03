@@ -1,0 +1,194 @@
+.toolbar {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  gap: 2px;
+}
+
+.toolsGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  align-items: center;
+}
+
+.toolButton {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.12s;
+  padding: 0;
+  position: relative;
+}
+
+.toolButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.toolButton:hover {
+  background: rgba(255,255,255,0.06);
+  color: #94a3b8;
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* Tooltip */
+.toolButton::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1e2a3a;
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border: 1px solid rgba(255,255,255,0.08);
+  z-index: 999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.toolButton:hover::after {
+  opacity: 1;
+}
+
+.activeTool {
+  background: rgba(99,102,241,0.15) !important;
+  border-color: rgba(99,102,241,0.3) !important;
+  color: #a5b4fc !important;
+}
+
+.activeMagnet {
+  background: rgba(0, 229, 255, 0.15) !important;
+  border-color: rgba(0, 229, 255, 0.3) !important;
+  color: var(--accent-light) !important;
+}
+
+.divider {
+  width: 20px;
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+  margin: 4px 0;
+}
+
+.clearButton {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.12s;
+  padding: 0;
+  position: relative;
+}
+
+.clearButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.clearButton:hover {
+  background: rgba(239,68,68,0.1);
+  color: #ef4444;
+  border-color: rgba(239,68,68,0.2);
+}
+
+.clearButton::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1e2a3a;
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border: 1px solid rgba(255,255,255,0.08);
+  z-index: 999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.clearButton:hover::after {
+  opacity: 1;
+}
+
+.historyButton {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.12s;
+  padding: 0;
+  position: relative;
+}
+
+.historyButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.historyButton:hover:not(:disabled) {
+  background: rgba(255,255,255,0.06);
+  color: #94a3b8;
+  border-color: rgba(255,255,255,0.08);
+}
+
+.historyButton::after {
+  content: attr(title);
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1e2a3a;
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 5px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border: 1px solid rgba(255,255,255,0.08);
+  z-index: 999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.historyButton:hover:not(:disabled)::after {
+  opacity: 1;
+}

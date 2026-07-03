@@ -1,0 +1,127 @@
+/* =========================================
+   Sidebar — Crextio Narrow Icon Nav
+   ========================================= */
+
+.sidebar {
+  width: 80px;
+  height: 100%;
+  background: #080914;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0;
+  flex-shrink: 0;
+  z-index: 50;
+  overflow: hidden;
+}
+
+/* Nav group */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  align-items: center;
+  flex: 1;
+}
+
+/* Each nav pill */
+.navItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  width: 60px;
+  height: 62px;
+  border-radius: 14px;
+  color: rgba(255, 255, 255, 0.35);
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+}
+
+.navItem:hover {
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.active {
+  background: rgba(109, 94, 249, 0.15) !important;
+  color: #a78bfa !important;
+  border-color: rgba(109, 94, 249, 0.2) !important;
+  box-shadow: 0 0 12px rgba(109, 94, 249, 0.1) inset !important;
+}
+
+/* Icon container */
+.icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+/* Label underneath icon */
+.labelText {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
+/* Footer / Avatar */
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: auto;
+  padding: 1rem 0 0.5rem;
+}
+
+.avatarWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4c3f9e, #6D5EF9);
+  color: #fff;
+  font-weight: 800;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(109, 94, 249, 0.5);
+  box-shadow: 0 0 16px rgba(109, 94, 249, 0.35);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.avatar:hover {
+  box-shadow: 0 0 24px rgba(109, 94, 249, 0.55);
+  transform: scale(1.05);
+}
+
+.avatarDot {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 14px;
+  height: 14px;
+  background: #6D5EF9;
+  border-radius: 50%;
+  border: 2px solid #080914;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.55rem;
+  color: #fff;
+  font-weight: 900;
+  line-height: 1;
+}
