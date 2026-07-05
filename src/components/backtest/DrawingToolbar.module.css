@@ -192,3 +192,71 @@
 .historyButton:hover:not(:disabled)::after {
   opacity: 1;
 }
+
+/* ============================================
+   MOBILE — horizontal strip + 44px touch targets
+   The parent .drawingToolbarWrapper flips to a horizontal
+   strip on ≤768px (see backtest.module.css); this re-orients
+   the toolbar's internals to match.
+   ============================================ */
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: row;
+    align-items: center;
+    height: 44px;
+    padding: 0 6px;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    width: max-content;
+    max-width: 100%;
+  }
+
+  .toolbar::-webkit-scrollbar { display: none; }
+
+  .toolsGroup {
+    flex-direction: row;
+    align-items: center;
+    width: auto;
+    gap: 2px;
+  }
+
+  /* Bump all buttons to 40px touch targets */
+  .toolButton,
+  .clearButton,
+  .historyButton {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .toolButton svg,
+  .clearButton svg,
+  .historyButton svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Hover tooltips are useless on touch — hide the ::after pseudos */
+  .toolButton::after,
+  .clearButton::after,
+  .historyButton::after {
+    display: none;
+  }
+
+  /* Divider becomes vertical in horizontal strip */
+  .divider {
+    width: 1px;
+    height: 20px;
+    margin: 0 2px;
+  }
+
+  /* Make tap feedback explicit (no hover reliance) */
+  .toolButton:active,
+  .clearButton:active,
+  .historyButton:active:not(:disabled) {
+    transform: scale(0.94);
+  }
+}

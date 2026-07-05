@@ -638,39 +638,90 @@
   
   .filtersRow {
     width: 100%;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow-x: visible;
+    gap: 0.5rem;
     padding-bottom: 0.5rem;
   }
-  
+
+  .filterSelect {
+    flex: 1 1 calc(33% - 0.5rem);
+    min-width: 100px;
+  }
+
   .workspace {
     padding: 1rem;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
   }
-  
+
   .bentoGrid {
     grid-template-columns: 1fr;
   }
-  
+
   .statsList {
     grid-template-columns: 1fr;
   }
-  
+
   .calendarGrid {
-    gap: 2px;
+    gap: 1px;
   }
-  
+
   .calendarCell {
-    padding: 2px;
-    min-height: 40px;
+    padding: 1px;
+    min-height: 32px;
   }
-  
+
   .cellDayNum, .cellPnl {
-    font-size: 0.55rem;
+    font-size: 0.5rem;
   }
   
   .demoBanner {
     flex-direction: column;
     gap: 1rem;
     align-items: flex-start;
+  }
+
+  .filterBtn {
+    min-height: 40px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .bentoCard {
+    min-height: 140px;
+  }
+
+  .cardVal {
+    font-size: 2rem;
+  }
+
+  .chartWrapper {
+    min-height: 280px;
+  }
+
+  .insightCard {
+    min-height: 100px;
+  }
+
+  .statRow {
+    min-height: 80px;
+  }
+
+  .emptyBtn {
+    min-height: 44px;
+  }
+
+  .generateBtn {
+    min-height: 44px;
+  }
+
+  .sendBtn {
+    min-height: 44px;
+  }
+
+  .chatInputField {
+    min-height: 44px;
+    font-size: 16px;
   }
 }
 
@@ -990,5 +1041,3 @@
     transform: translateY(0);
   }
 }
-
-

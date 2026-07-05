@@ -1066,7 +1066,7 @@
   }
   
   .editorCard {
-    min-height: 350px;
+    min-height: 240px;
   }
 
   .widgetsColumn {
@@ -1080,11 +1080,30 @@
   .saveBtn {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
+  }
+
+  .dateArrowBtn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .dateInput {
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  .tabBtn {
+    min-height: 44px;
+  }
+
+  .tradeItem {
+    min-height: 44px;
   }
 
   .assistantCard {
     padding: 1rem;
-    min-height: 400px;
+    min-height: 280px;
   }
 
   .suggestionsGrid {

@@ -864,9 +864,11 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       return timeScale.coordinateToTime(coord);
     };
 
-    const handleBodyMouseDown = (e: MouseEvent) => {
-      // Only drag with left click and when no tool is active
-      if (e.button !== 0 || activeToolRef.current) return;
+    const handleBodyPointerDown = (e: PointerEvent) => {
+      // Touch-aware: accept touch/pen primary contact, and mouse left-button only
+      const isTouchOrPen = e.pointerType === 'touch' || e.pointerType === 'pen';
+      if (!isTouchOrPen && e.button !== 0) return;
+      if (activeToolRef.current) return;
       if (!drawingManager || !containerRef.current) return;
 
       const rect = containerRef.current.getBoundingClientRect();
@@ -890,7 +892,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       if (hit && !hit.options.locked) {
         let drawingToDrag = hit;
 
-        // If Ctrl is pressed, clone the drawing! (Ctrl + Drag shortcut)
+        // If Ctrl is pressed (mouse), clone the drawing! (Ctrl + Drag shortcut)
         if (e.ctrlKey) {
           const registry = getToolRegistry();
           const definition = registry.get(hit.type);
@@ -931,7 +933,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       }
     };
 
-    const handleBodyMouseMove = (e: MouseEvent) => {
+    const handleBodyPointerMove = (e: PointerEvent) => {
       if (!isDraggingBody || !dragDrawing || !startPoint || startLogical === null || startPrice === null) return;
 
       const rect = containerRef.current!.getBoundingClientRect();
@@ -973,7 +975,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       e.preventDefault();
     };
 
-    const handleBodyMouseUp = (e: MouseEvent) => {
+    const handleBodyPointerUp = (e: PointerEvent) => {
       if (isDraggingBody) {
         isDraggingBody = false;
         if (dragDrawing && onDrawingChange) {
@@ -996,7 +998,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       }
     };
 
-    const handleMouseMoveHover = (e: MouseEvent) => {
+    const handlePointerMoveHover = (e: PointerEvent) => {
+      // Hover hit-test only makes sense for mouse; on touch there's no hover state
+      if (e.pointerType !== 'mouse') return;
       if (activeToolRef.current || isDraggingBody) return;
       if (!drawingManager || !containerRef.current) return;
 
@@ -1014,12 +1018,12 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       }
     };
 
-    // Register event listeners
-    container.addEventListener('mousedown', handleBodyMouseDown, true);
-    container.addEventListener('mousemove', handleMouseMoveHover, true);
+    // Register event listeners (Pointer Events = mouse + touch + pen)
+    container.addEventListener('pointerdown', handleBodyPointerDown, true);
+    container.addEventListener('pointermove', handlePointerMoveHover, true);
     container.addEventListener('contextmenu', handleContextMenu, true);
-    window.addEventListener('mousemove', handleBodyMouseMove, true);
-    window.addEventListener('mouseup', handleBodyMouseUp, true);
+    window.addEventListener('pointermove', handleBodyPointerMove, true);
+    window.addEventListener('pointerup', handleBodyPointerUp, true);
 
     // Register double click listener
     container.addEventListener('dblclick', handleDblClick);
@@ -1034,14 +1038,14 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     return () => {
       if (container) {
-        container.removeEventListener('mousedown', handleBodyMouseDown, true);
-        container.removeEventListener('mousemove', handleMouseMoveHover, true);
+        container.removeEventListener('pointerdown', handleBodyPointerDown, true);
+        container.removeEventListener('pointermove', handlePointerMoveHover, true);
         container.removeEventListener('contextmenu', handleContextMenu, true);
         container.removeEventListener('dblclick', handleDblClick);
       }
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('mousemove', handleBodyMouseMove, true);
-      window.removeEventListener('mouseup', handleBodyMouseUp, true);
+      window.removeEventListener('pointermove', handleBodyPointerMove, true);
+      window.removeEventListener('pointerup', handleBodyPointerUp, true);
       resizeObserver.disconnect();
       unsubs.forEach((unsub) => unsub());
       chart.unsubscribeClick(handleDrawingClick);

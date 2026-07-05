@@ -79,6 +79,34 @@
   .workspace {
     padding: 1rem;
   }
+
+  .inputField {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .registerBtn {
+    min-height: 44px;
+  }
+
+  .copyBtn {
+    min-height: 40px;
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .deleteBtn {
+    min-height: 44px;
+    padding: 0.6rem 1.25rem;
+  }
+
+  .toggleSwitch {
+    min-height: 44px;
+  }
+
+  .emptyState {
+    min-height: 200px;
+  }
 }
 
 .leftColumn {
@@ -440,7 +468,7 @@
 /* Toast Success Alert overlay (Glassmorphic Toast) */
 .toastOverlay {
   position: fixed;
-  bottom: 2rem;
+  bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
   right: 2rem;
   background: var(--color-profit);
   color: #fff;
@@ -464,4 +492,3 @@
     transform: translateY(0);
   }
 }
-

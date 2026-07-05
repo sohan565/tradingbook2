@@ -1337,12 +1337,301 @@
 .backtestContainer ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); background-clip: padding-box; }
 
 /* ============================================
-   RESPONSIVE
+   RESPONSIVE — single breakpoint at 768px
+   The desktop tree reflows for narrow screens:
+   - Trade panel hides off-screen, slides in via overlay
+   - Bottom panel becomes a draggable bottom sheet
+   - Drawing toolbar flips to horizontal strip
    ============================================ */
 
-@media (max-width: 900px) {
-  .tradePanel { width: 220px; min-width: 220px; }
-  .bottomPanel { height: 160px; min-height: 160px; }
+@media (max-width: 768px) {
+  /* --- Shell sizing: dvh so address bar doesn't clip --- */
+  .backtestContainer {
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  /* --- Top bar: compact, scrollable controls --- */
+  .topBar {
+    height: auto;
+    min-height: 48px;
+    padding: 0.4rem 0.6rem;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .topBarCollapsed {
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .controlsGroup {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex-wrap: nowrap;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+
+  .controlsGroup::-webkit-scrollbar { display: none; }
+
+  .topBarDivider { display: none; }
+
+  .topBarBtn {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0.3rem;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .symbolDisplay {
+    font-size: 0.78rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .chartTypeSelect {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.4rem;
+  }
+
+  .timeframeBtn {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.45rem;
+    min-height: 32px;
+    flex-shrink: 0;
+  }
+
+  .indicatorsBtn {
+    font-size: 0.72rem;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .balanceDisplay {
+    font-size: 0.82rem;
+    padding: 0.2rem 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .sessionTag { display: none; }
+  .manualSaveBtn { display: none; }
+
+  /* --- Main area: full-width chart, no sidebars --- */
+  .mainArea {
+    flex-direction: column;
+  }
+
+  /* --- Trade panel: off-screen slide-over --- */
+  .tradePanel {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(320px, 85vw);
+    z-index: 500;
+    transform: translateX(-100%);
+    transition: transform var(--t-normal);
+    box-shadow: none;
+    background: var(--term-panel, #0d0f1a);
+    border-right: 1px solid var(--term-border);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .tradePanel.orderPanelOpen {
+    transform: translateX(0);
+    box-shadow: var(--shadow-xl, 0 4px 24px rgba(0,0,0,0.5));
+  }
+
+  /* Slide-over backdrop */
+  .orderPanelOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 499;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-normal);
+  }
+
+  .orderPanelOverlay.orderPanelOverlayVisible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* FAB to open order panel */
+  .orderPanelFab {
+    position: fixed;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    right: 16px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--accent, #6366f1);
+    color: #fff;
+    border: none;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+    z-index: 400;
+    transition: transform var(--t-fast), box-shadow var(--t-fast);
+    touch-action: manipulation;
+  }
+
+  .orderPanelFab:active {
+    transform: scale(0.93);
+  }
+
+  /* --- Chart area: full-width, stacked --- */
+  .chartArea {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chartWorkspace {
+    flex-direction: column;
+  }
+
+  /* Drawing toolbar → horizontal scrollable strip */
+  .drawingToolbarWrapper {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: auto;
+    min-height: 44px;
+    border-right: none;
+    border-bottom: 1px solid var(--term-border);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .drawingToolbarWrapper::-webkit-scrollbar { display: none; }
+
+  .chartContent {
+    flex: 1;
+    min-height: 200px;
+  }
+
+  /* --- Bottom panel → draggable bottom sheet --- */
+  .bottomPanel {
+    height: 200px;
+    min-height: 48px;
+    max-height: 60dvh;
+    border-top: 1px solid var(--term-border);
+    transition: height 0.25s var(--ease-out), min-height 0.25s var(--ease-out);
+  }
+
+  .bottomPanelCollapsed {
+    height: 48px !important;
+    min-height: 48px !important;
+  }
+
+  .bottomPanelCollapsed .tabContent {
+    display: none !important;
+  }
+
+  /* Bottom sheet drag handle */
+  .bottomSheetHandle {
+    display: flex;
+    justify-content: center;
+    padding: 6px 0 2px;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .bottomSheetHandle::after {
+    content: '';
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--term-text-4, rgba(255,255,255,0.2));
+  }
+
+  .tabsHeader {
+    height: auto;
+    min-height: 42px;
+    padding: 0 8px;
+  }
+
+  .tabsList {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabsList::-webkit-scrollbar { display: none; }
+
+  .tabButton {
+    padding: 0 12px;
+    font-size: 0.75rem;
+    min-height: 40px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* --- Touch targets inside panels --- */
+  .playBtn,
+  .stepBtn {
+    min-height: 44px;
+    font-size: 0.8rem;
+  }
+
+  .resetBtn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .buyBtn,
+  .sellBtn {
+    min-height: 48px;
+    font-size: 0.9rem;
+  }
+
+  .inputField {
+    min-height: 44px;
+    font-size: 16px; /* prevent Android zoom */
+  }
+
+  .speedBtn {
+    min-height: 36px;
+    font-size: 0.7rem;
+  }
+
+  .endSessionBtn {
+    min-height: 40px;
+    min-width: 40px;
+  }
+
+  /* Bottom table readability */
+  .bottomTable th {
+    font-size: 0.6rem;
+    padding: 5px 6px;
+  }
+
+  .bottomTable td {
+    font-size: 0.7rem;
+    padding: 5px 6px;
+  }
 }
 
 /* Timezone Selector Overlay on Chart */
@@ -1376,456 +1665,53 @@
 }
 
 /* ============================================
-   MOBILE LAYOUT & CONTROLS OVERRIDES
+   MOBILE-SPECIFIC ELEMENTS
+   These are hidden by default (desktop) and
+   revealed only inside the ≤768px media query.
    ============================================ */
 
-.mobileBacktestContainer {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-  background: var(--term-bg);
-  color: var(--term-text);
-  overflow: hidden;
+/* Bottom sheet drag handle — hidden on desktop */
+.bottomSheetHandle {
+  display: none;
 }
 
-.mobileHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.6rem 1rem;
-  background: var(--term-surface);
-  border-bottom: 1px solid var(--term-border);
-  z-index: 10;
+/* Floating action button — hidden on desktop */
+.orderPanelFab {
+  display: none;
 }
 
-.mobileHeaderLeft {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+/* Order panel backdrop — hidden on desktop */
+.orderPanelOverlay {
+  display: none;
 }
 
-.mobileSymbol {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--term-text);
+@media (max-width: 768px) {
+  /* Reveal the drag handle + FAB + overlay on mobile */
+  .bottomSheetHandle {
+    display: flex;
+  }
+
+  .orderPanelFab {
+    display: flex;
+  }
+
+  .orderPanelOverlay {
+    display: block;
+  }
+
+  /* Expanded bottom sheet takes up to 60dvh */
+  .bottomPanel.bottomSheetExpanded {
+    height: 60dvh !important;
+    min-height: 60dvh !important;
+  }
+
+  .bottomPanel.bottomSheetExpanded .tabContent {
+    max-height: calc(60dvh - 90px);
+  }
+
+  /* Timezone selector hidden on mobile to save chart space */
+  .timezoneSelectorContainer {
+    display: none;
+  }
 }
 
-.mobileTimeframe {
-  font-size: 0.72rem;
-  font-weight: 650;
-  color: var(--term-accent-2);
-  background: var(--term-accent-soft);
-  padding: 0.1rem 0.4rem;
-  border-radius: 5px;
-}
-
-.mobileHeaderRight {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.mobileEquityDisplay {
-  font-weight: 700;
-  font-size: 1rem;
-  font-family: var(--font-mono);
-}
-
-.mobileEndSessionBtn {
-  background: transparent;
-  border: 1px solid var(--term-border-strong);
-  color: var(--term-text-2);
-  font-size: 0.8rem;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mobileMainArea {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.mobileTabContentActive {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.mobileOhlcOverlay {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  padding: 0.35rem 0.75rem;
-  background: var(--term-panel);
-  border-bottom: 1px solid var(--term-border);
-  font-size: 0.65rem;
-  color: var(--term-text-2);
-}
-
-.mobileToolbarRow {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem;
-  background: var(--term-surface);
-  border-bottom: 1px solid var(--term-border);
-}
-
-.mobileChartTypeSelect {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--term-border-strong);
-  color: var(--term-text);
-  font-size: 0.72rem;
-  padding: 0.2rem 0.4rem;
-  border-radius: 5px;
-}
-
-.mobileToolbarBtn {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--term-border-strong);
-  color: var(--term-text);
-  font-size: 0.72rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 5px;
-  cursor: pointer;
-  font-weight: 550;
-}
-
-.mobileChartWrapper {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-}
-
-.mobileScrollContent {
-  flex: 1;
-  padding: 0.75rem;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.mobileSectionCard {
-  background: var(--term-card);
-  border: 1px solid var(--term-border);
-  border-radius: 12px;
-  padding: 0.85rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.mobileSectionTitle {
-  font-size: 0.7rem;
-  font-weight: 650;
-  color: var(--term-text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin-top: 0;
-  margin-bottom: 0.6rem;
-}
-
-.mobileReplayControls {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.mobilePlayBtn {
-  flex: 2;
-  border: none;
-  color: #fff;
-  font-size: 0.8rem;
-  font-weight: 650;
-  padding: 0.5rem;
-  border-radius: 7px;
-  cursor: pointer;
-  background: var(--term-accent);
-}
-
-.mobileStepBtn,
-.mobileResetBtn {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--term-border-strong);
-  color: var(--term-text);
-  font-size: 0.8rem;
-  font-weight: 550;
-  padding: 0.5rem;
-  border-radius: 7px;
-  cursor: pointer;
-}
-
-.mobileCandleCounter {
-  font-size: 0.72rem;
-  color: var(--term-text-3);
-  text-align: center;
-  margin: 0.5rem 0 0.35rem 0;
-}
-
-.mobileProgressTrack {
-  height: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 0.6rem;
-}
-
-.mobileProgressFill {
-  height: 100%;
-  background: var(--term-accent);
-}
-
-.mobileSpeedRow {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0.25rem;
-}
-
-.mobileSpeedBtn {
-  background: transparent;
-  border: 1px solid var(--term-border);
-  color: var(--term-text-3);
-  font-size: 0.7rem;
-  padding: 0.25rem;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.mobileSpeedBtnActive {
-  background: var(--term-accent-soft);
-  border-color: var(--term-accent);
-  color: var(--term-accent-2);
-  font-weight: 650;
-}
-
-.mobileOrderButtons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.mobileBuyBtn {
-  background: var(--term-up);
-  color: #06130d;
-  border: none;
-  font-weight: 700;
-  padding: 0.6rem;
-  border-radius: 7px;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.mobileSellBtn {
-  background: var(--term-down);
-  color: #fff;
-  border: none;
-  font-weight: 700;
-  padding: 0.6rem;
-  border-radius: 7px;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.mobileInputGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.6rem;
-}
-
-.mobileInputGroup label {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: var(--term-text-3);
-}
-
-.mobileInputField {
-  background: var(--term-input);
-  border: 1px solid var(--term-border-strong);
-  color: var(--term-text);
-  border-radius: 7px;
-  padding: 0.45rem;
-  font-size: 0.8rem;
-  outline: none;
-}
-
-.mobileInputField:focus {
-  border-color: var(--term-accent);
-}
-
-.mobileRiskRewardStats {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--term-border);
-  border-radius: 7px;
-  padding: 0.5rem;
-  margin: 0.5rem 0;
-  font-size: 0.72rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.mobileQuickBtn {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--term-border);
-  padding: 0.4rem;
-  border-radius: 5px;
-  font-size: 0.72rem;
-  cursor: pointer;
-  color: var(--term-text-3);
-}
-
-.mobileEmptyState {
-  color: var(--term-text-3);
-  font-size: 0.8rem;
-  text-align: center;
-  padding: 2rem 0;
-}
-
-.mobilePositionCard {
-  border-radius: 9px;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-  border-left: 2px solid;
-}
-
-.mobilePosLong {
-  background: var(--term-up-soft);
-  border: 1px solid var(--term-up-border);
-  border-left-color: var(--term-up);
-}
-
-.mobilePosShort {
-  background: var(--term-down-soft);
-  border: 1px solid var(--term-down-border);
-  border-left-color: var(--term-down);
-}
-
-.mobilePosHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-  margin-bottom: 0.35rem;
-}
-
-.mobilePosCloseBtn {
-  background: var(--term-down-soft);
-  border: 1px solid var(--term-down-border);
-  color: var(--term-down);
-  font-size: 0.65rem;
-  font-weight: 650;
-  padding: 0.2rem 0.5rem;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.mobilePosDetails {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.72rem;
-  color: var(--term-text-3);
-  margin-bottom: 0.15rem;
-}
-
-.mobilePosPnl {
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-
-.mobileStatsGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-.mobileStatsCard {
-  background: var(--term-card);
-  border: 1px solid var(--term-border);
-  border-radius: 9px;
-  padding: 0.6rem;
-  display: flex;
-  flex-direction: column;
-}
-
-.mobileStatsLabel {
-  font-size: 0.68rem;
-  color: var(--term-text-3);
-}
-
-.mobileStatsVal {
-  font-weight: 700;
-  font-size: 0.95rem;
-  margin-top: 0.15rem;
-}
-
-.mobileColorProfit { color: var(--term-up); }
-.mobileColorLoss { color: var(--term-down); }
-
-.mobileHistoryList {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.mobileHistoryCard {
-  background: var(--term-card);
-  border: 1px solid var(--term-border);
-  border-radius: 9px;
-  padding: 0.65rem;
-}
-
-.mobileHistoryHeader {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.78rem;
-  margin-bottom: 0.25rem;
-}
-
-.mobileHistoryDetails {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.7rem;
-  color: var(--term-text-3);
-  margin-bottom: 0.1rem;
-}
-
-.mobileTabBar {
-  display: flex;
-  background: var(--term-surface);
-  border-top: 1px solid var(--term-border);
-  z-index: 10;
-}
-
-.mobileTabItem {
-  flex: 1;
-  background: transparent;
-  border: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 0.45rem 0.2rem;
-  color: var(--term-text-3);
-  font-size: 0.68rem;
-  font-weight: 550;
-  cursor: pointer;
-  gap: 0.15rem;
-  transition: color 0.13s, background 0.13s;
-}
-
-.mobileTabItemActive {
-  color: var(--term-accent-2);
-  background: var(--term-accent-soft);
-}

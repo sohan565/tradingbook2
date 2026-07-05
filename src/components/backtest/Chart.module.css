@@ -11,6 +11,10 @@
 .chartContainer {
   width: 100%;
   height: 100%;
+  /* Let the chart library handle all touch/pointer gestures directly —
+     prevents the browser from intercepting drags as page scroll/zoom,
+     which would block drawing creation and dragging on touch devices. */
+  touch-action: none;
 }
 
 .chartContainer[data-hover-drawing="true"] canvas {

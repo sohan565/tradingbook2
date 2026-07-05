@@ -371,4 +371,11 @@
   .categoryGrid {
     grid-template-columns: 1fr;
   }
+  .searchInput { min-height: 44px; font-size: 16px; }
+  .configInput { height: 40px; font-size: 16px; }
+  .colorPicker { width: 40px; height: 40px; }
+  .colorText { height: 40px; font-size: 16px; }
+  .modalClose { min-width: 44px; min-height: 44px; }
+  .modal { height: 100dvh; }
+  .actionBtn, .deleteBtn { min-height: 40px; min-width: 40px; }
 }

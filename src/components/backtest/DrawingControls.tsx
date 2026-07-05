@@ -179,31 +179,39 @@ export const DrawingFloatingToolbar: React.FC<FloatingToolbarProps> = ({
     return () => window.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Handle Dragging
-  const handleMouseDown = (e: React.MouseEvent) => {
+  // Handle Dragging — Pointer Events (mouse + touch + stylus)
+  const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
+    // Capture the pointer so move/up events keep firing even if the finger
+    // slides off the drag handle — essential for touch dragging.
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     isDraggingRef.current = true;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     toolbarStartRef.current = { x, y };
 
-    const handleMouseMove = (ev: MouseEvent) => {
+    const handlePointerMove = (ev: PointerEvent) => {
       if (!isDraggingRef.current) return;
       const dx = ev.clientX - dragStartRef.current.x;
       const dy = ev.clientY - dragStartRef.current.y;
-      onPositionChange({
-        x: toolbarStartRef.current.x + dx,
-        y: toolbarStartRef.current.y + dy,
-      });
+      // Clamp to viewport so the toolbar can't be dragged off-screen on mobile
+      const maxX = window.innerWidth - 60;
+      const maxY = window.innerHeight - 60;
+      const nextX = Math.max(0, Math.min(maxX, toolbarStartRef.current.x + dx));
+      const nextY = Math.max(0, Math.min(maxY, toolbarStartRef.current.y + dy));
+      onPositionChange({ x: nextX, y: nextY });
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = (ev: PointerEvent) => {
       isDraggingRef.current = false;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(ev.pointerId);
+      } catch (_) { /* pointer already released */ }
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
 
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
   };
 
   const strokeColor = drawing.style?.lineColor || '#00e5ff';
@@ -223,7 +231,7 @@ export const DrawingFloatingToolbar: React.FC<FloatingToolbarProps> = ({
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* Drag handle */}
-      <div className={styles.dragHandle} onMouseDown={handleMouseDown} title="Drag to move toolbar">
+      <div className={styles.dragHandle} onPointerDown={handlePointerDown} title="Drag to move toolbar">
         ⋮⋮
       </div>
 

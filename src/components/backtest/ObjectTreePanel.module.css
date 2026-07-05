@@ -150,3 +150,36 @@
 .drawingItem:hover .deleteBtn {
   opacity: 0.9;
 }
+
+/* ============================================ MOBILE — bottom sheet + 44px targets ============================================ */
+@media (max-width: 768px) {
+  .panel {
+    position: fixed;
+    top: auto;
+    right: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 60dvh;
+    border-radius: 12px 12px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .header { min-height: 52px; padding: 14px 16px; }
+  .header h3 { font-size: 15px; }
+  .closeBtn { min-width: 44px; min-height: 44px; }
+
+  .drawingItem { min-height: 52px; padding: 12px; }
+
+  .actionBtn, .deleteBtn {
+    min-width: 44px;
+    min-height: 44px;
+    opacity: 0.9; /* always visible on touch — no hover */
+  }
+
+  /* Hover-reveal is meaningless on touch; keep buttons visible */
+  .drawingItem:hover .actionBtn,
+  .drawingItem:hover .deleteBtn {
+    opacity: 0.9;
+  }
+}

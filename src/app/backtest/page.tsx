@@ -113,19 +113,6 @@ export default function BacktestPage() {
 
   const [sessionStatus, setSessionStatus] = useState<SessionStatus>('setup');
 
-  const [isMobile, setIsMobile] = useState<boolean>(false);
-  const [activeMobileTab, setActiveMobileTab] = useState<'chart' | 'trade' | 'positions' | 'history'>('chart');
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 900);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   useEffect(() => {
     if (sessionStatus === 'active' && isGlobalNavCollapsed) {
       document.body.classList.add('navigation-collapsed');
@@ -277,6 +264,33 @@ export default function BacktestPage() {
     historyIndexRef.current = historyIndex;
   }, [historyIndex]);
 
+  // Mobile order panel slide-over state
+  const [isOrderPanelOpen, setIsOrderPanelOpen] = useState<boolean>(false);
+
+  // Mobile bottom sheet drag state
+  const [isBottomSheetExpanded, setIsBottomSheetExpanded] = useState<boolean>(false);
+  const [bottomSheetTouchStart, setBottomSheetTouchStart] = useState<number | null>(null);
+
+  const handleBottomSheetTouchStart = useCallback((e: React.TouchEvent) => {
+    setBottomSheetTouchStart(e.touches[0].clientY);
+  }, []);
+
+  const handleBottomSheetTouchMove = useCallback((e: React.TouchEvent) => {
+    if (bottomSheetTouchStart === null) return;
+    const delta = bottomSheetTouchStart - e.touches[0].clientY;
+    if (Math.abs(delta) > 40) {
+      setIsBottomSheetExpanded(delta > 0);
+      setBottomSheetTouchStart(null);
+    }
+  }, [bottomSheetTouchStart]);
+
+  const handleBottomSheetTouchEnd = useCallback(() => {
+    setBottomSheetTouchStart(null);
+  }, []);
+
+  const toggleBottomSheet = useCallback(() => {
+    setIsBottomSheetExpanded(prev => !prev);
+  }, []);
 
 
   // ============================================
@@ -1927,405 +1941,6 @@ export default function BacktestPage() {
     return null;
   })();
 
-  if (isMobile) {
-    return (
-      <div className={styles.mobileBacktestContainer}>
-        {isLoading && (
-          <div className={styles.loadingOverlay}>
-            <div className="spinner" />
-            <span>Loading data...</span>
-          </div>
-        )}
-
-        {/* ── MOBILE HEADER ── */}
-        <header className={styles.mobileHeader}>
-          <div className={styles.mobileHeaderLeft}>
-            <span className={styles.mobileSymbol}>{SYMBOLS[symbol]?.name || symbol}</span>
-            <span className={styles.mobileTimeframe}>{timeframe}</span>
-          </div>
-          <div className={styles.mobileHeaderRight}>
-            <div
-              className={styles.mobileEquityDisplay}
-              style={{
-                color: equity >= startingBalance ? '#10b981' : '#ef4444',
-              }}
-            >
-              {formatCurrency(equity)}
-            </div>
-            <button className={styles.mobileEndSessionBtn} onClick={handleEndSession} title="End session">✕</button>
-          </div>
-        </header>
-
-        {/* ── MOBILE WORKSPACE ── */}
-        <main className={styles.mobileMainArea}>
-          {/* TAB 1: CHART */}
-          {activeMobileTab === 'chart' && (
-            <div className={styles.mobileTabContentActive}>
-              {/* OHLC Overlay */}
-              <div className={styles.mobileOhlcOverlay}>
-                {hoverOhlc ? (
-                  <>
-                    <span>O: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(hoverOhlc.open, symbol)}</span></span>
-                    <span>H: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(hoverOhlc.high, symbol)}</span></span>
-                    <span>L: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(hoverOhlc.low, symbol)}</span></span>
-                    <span>C: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(hoverOhlc.close, symbol)}</span></span>
-                  </>
-                ) : currentCandle ? (
-                  <>
-                    <span>O: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(currentCandle.open, symbol)}</span></span>
-                    <span>H: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(currentCandle.high, symbol)}</span></span>
-                    <span>L: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(currentCandle.low, symbol)}</span></span>
-                    <span>C: <span style={{ color: 'var(--text-primary)' }}>{formatPrice(currentCandle.close, symbol)}</span></span>
-                  </>
-                ) : (
-                  <span>No data</span>
-                )}
-              </div>
-
-              {/* Toolbar Controls inside chart */}
-              <div className={styles.mobileToolbarRow}>
-                <select
-                  className={styles.mobileChartTypeSelect}
-                  value={chartType}
-                  onChange={(e) => setChartType(e.target.value as any)}
-                >
-                  <option value="Candles">Candles</option>
-                  <option value="HeikinAshi">Heikin Ashi</option>
-                  <option value="Bars">Bars</option>
-                  <option value="Line">Line</option>
-                  <option value="Area">Area</option>
-                </select>
-
-                <button className={styles.mobileToolbarBtn} onClick={() => setIsIndicatorPanelOpen(true)}>📊 Ind</button>
-                <button className={styles.mobileToolbarBtn} onClick={() => setIsObjectTreeOpen(true)}>🌳 Obj</button>
-                <button
-                  className={styles.mobileToolbarBtn}
-                  onClick={() => setIsJumpToBarActive(!isJumpToBarActive)}
-                  style={{
-                    color: isJumpToBarActive ? 'var(--accent)' : 'inherit',
-                    borderColor: isJumpToBarActive ? 'var(--accent)' : 'rgba(255, 255, 255, 0.08)'
-                  }}
-                >📍 Jump</button>
-              </div>
-
-              {/* Chart Component Wrapper */}
-              <div className={styles.mobileChartWrapper}>
-                <Chart
-                  key={`${chartType}-${activeSessionId || 'none'}`}
-                  ref={chartComponentRef}
-                  chartType={chartType}
-                  candles={visibleCandles}
-                  markers={markers}
-                  positions={openPositions}
-                  symbol={symbol}
-                  onCrosshairMove={setHoverOhlc}
-                  activeTool={activeTool}
-                  drawings={drawings}
-                  onDrawingChange={handleDrawingChange}
-                  activeIndicators={activeIndicators}
-                  sessionKey={activeSessionId || undefined}
-                  displayTimezone={displayTimezone}
-                  isMagnetMode={isMagnetMode}
-                  isJumpToBarActive={isJumpToBarActive}
-                  onJumpToBar={handleJumpToBar}
-                  onSelectTool={setActiveTool}
-                  timeframe={timeframe}
-                />
-              </div>
-
-              <ObjectTreePanel 
-                isOpen={isObjectTreeOpen}
-                onClose={() => setIsObjectTreeOpen(false)}
-                drawings={drawings}
-                onDelete={(id) => {
-                  chartComponentRef.current?.removeDrawing(id);
-                }}
-                onUpdateDrawing={handleUpdateDrawing}
-              />
-            </div>
-          )}
-
-          {/* TAB 2: TRADE CONTROLS */}
-          {activeMobileTab === 'trade' && (
-            <div className={styles.mobileScrollContent}>
-              {/* Compact Replay Controls */}
-              <div className={styles.mobileSectionCard}>
-                <h4 className={styles.mobileSectionTitle}>Replay Playback</h4>
-                <div className={styles.mobileReplayControls}>
-                  <button
-                    className={styles.mobilePlayBtn}
-                    onClick={handleTogglePlay}
-                    style={{ backgroundColor: isPlaying ? 'rgba(239, 68, 68, 0.85)' : '#6366f1' }}
-                  >
-                    {isPlaying ? '⏸ Pause' : '▶ Play'}
-                  </button>
-                  <button className={styles.mobileStepBtn} onClick={() => { setIsPlaying(false); stepForward(); }}>
-                    ⏭ Step
-                  </button>
-                  <button className={styles.mobileResetBtn} onClick={handleReset}>
-                    🔄 Reset
-                  </button>
-                </div>
-                <div className={styles.mobileCandleCounter}>
-                  Bar {currentIndex + 1} / {allCandles.length} ({replayPercent}%)
-                </div>
-                <div className={styles.mobileProgressTrack}>
-                  <div className={styles.mobileProgressFill} style={{ width: `${replayPercent}%` }} />
-                </div>
-                
-                {/* Speed buttons */}
-                <div className={styles.mobileSpeedRow}>
-                  {[
-                    { label: '1/s', ms: 1000 },
-                    { label: '2/s', ms: 500 },
-                    { label: '3/s', ms: 333 },
-                    { label: '5/s', ms: 200 }
-                  ].map(sp => (
-                    <button
-                      key={sp.ms}
-                      className={`${styles.mobileSpeedBtn} ${speed === sp.ms ? styles.mobileSpeedBtnActive : ''}`}
-                      onClick={() => setSpeed(sp.ms)}
-                    >
-                      {sp.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Place Order form */}
-              <div className={styles.mobileSectionCard} style={{ marginTop: '1rem' }}>
-                <h4 className={styles.mobileSectionTitle}>Place New Order</h4>
-                <div className={styles.mobileOrderButtons}>
-                  <button className={styles.mobileBuyBtn} onClick={() => handlePlaceOrder('BUY')}>BUY / Long</button>
-                  <button className={styles.mobileSellBtn} onClick={() => handlePlaceOrder('SELL')}>SELL / Short</button>
-                </div>
-
-                <div className={styles.mobileInputGroup}>
-                  <label>Lots ({symbol === 'XAUUSD' ? '100 oz' : '100k units'})</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    className={styles.mobileInputField}
-                    value={lotSize}
-                    onChange={e => setLotSize(parseFloat(e.target.value) || 0.01)}
-                  />
-                </div>
-
-                <div className={styles.mobileInputGroup}>
-                  <label>Stop Loss Price</label>
-                  <input
-                    type="text"
-                    placeholder="No Stop Loss"
-                    className={styles.mobileInputField}
-                    value={stopLossInput}
-                    onChange={e => setStopLossInput(e.target.value)}
-                  />
-                </div>
-
-                <div className={styles.mobileInputGroup}>
-                  <label>Take Profit Price</label>
-                  <input
-                    type="text"
-                    placeholder="No Take Profit"
-                    className={styles.mobileInputField}
-                    value={takeProfitInput}
-                    onChange={e => setTakeProfitInput(e.target.value)}
-                  />
-                </div>
-
-                {liveRiskReward && (
-                  <div className={styles.mobileRiskRewardStats}>
-                    <div style={{ color: 'var(--accent)', fontWeight: 'bold' }}>
-                      Setup: <span style={{ color: liveRiskReward.isBuy ? '#10b981' : '#ef4444' }}>{liveRiskReward.isBuy ? 'BUY' : 'SELL'}</span>
-                    </div>
-                    {liveRiskReward.riskUSD > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Risk (Loss):</span>
-                        <span style={{ color: '#ef4444', fontWeight: 'bold' }}>-{formatCurrency(liveRiskReward.riskUSD)} ({liveRiskReward.riskPercent.toFixed(2)}%)</span>
-                      </div>
-                    )}
-                    {liveRiskReward.rewardUSD > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Reward (Profit):</span>
-                        <span style={{ color: '#10b981', fontWeight: 'bold' }}>+{formatCurrency(liveRiskReward.rewardUSD)} ({liveRiskReward.rewardPercent.toFixed(2)}%)</span>
-                      </div>
-                    )}
-                    {liveRiskReward.rrRatio && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '0.25rem', marginTop: '0.25rem' }}>
-                        <span>R:R Ratio:</span>
-                        <span style={{ color: '#00e5ff', fontWeight: 'bold' }}>{liveRiskReward.rrRatio}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => setQuickSLTP(50, 100)}
-                    className={styles.mobileQuickBtn}
-                  >
-                    Quick 1:2 (50/100p)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setQuickSLTP(100, 200)}
-                    className={styles.mobileQuickBtn}
-                  >
-                    Quick 1:2 (100/200p)
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: ACTIVE POSITIONS */}
-          {activeMobileTab === 'positions' && (
-            <div className={styles.mobileScrollContent}>
-              <h4 className={styles.mobileSectionTitle}>Open Positions ({openPositions.length})</h4>
-              {openPositions.length === 0 ? (
-                <div className={styles.mobileEmptyState}>No active open positions. Go to the Trade tab to place an order.</div>
-              ) : (
-                openPositions.map(pos => (
-                  <div
-                    key={pos.id}
-                    className={`${styles.mobilePositionCard} ${pos.type === 'BUY' ? styles.mobilePosLong : styles.mobilePosShort}`}
-                  >
-                    <div className={styles.mobilePosHeader}>
-                      <span style={{ fontWeight: 700, color: pos.type === 'BUY' ? '#10b981' : '#ef4444' }}>
-                        {pos.type} {pos.lotSize} Lots
-                      </span>
-                      <button
-                        className={styles.mobilePosCloseBtn}
-                        onClick={() => handleClosePosition(pos.id)}
-                      >
-                        CLOSE
-                      </button>
-                    </div>
-
-                    <div className={styles.mobilePosDetails}>
-                      <span>Entry: {formatPrice(pos.entryPrice, symbol)}</span>
-                      <span>Current: {formatPrice(pos.currentPrice, symbol)}</span>
-                    </div>
-
-                    <div className={styles.mobilePosDetails}>
-                      <span>SL: {pos.stopLoss ? formatPrice(pos.stopLoss, symbol) : '-'}</span>
-                      <span>TP: {pos.takeProfit ? formatPrice(pos.takeProfit, symbol) : '-'}</span>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '0.4rem' }}>
-                      <span className={styles.mobilePosPnl} style={{ color: pos.unrealizedPnl >= 0 ? '#10b981' : '#ef4444' }}>
-                        {formatCurrency(pos.unrealizedPnl)}
-                      </span>
-                      <span style={{ fontSize: '0.75rem', opacity: 0.6, fontFamily: 'monospace' }}>
-                        {formatPips(pos.unrealizedPips)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* TAB 4: HISTORY & STATS */}
-          {activeMobileTab === 'history' && (
-            <div className={styles.mobileScrollContent}>
-              {/* Stats Grid */}
-              <div className={styles.mobileStatsGrid}>
-                <div className={styles.mobileStatsCard}>
-                  <span className={styles.mobileStatsLabel}>Trades</span>
-                  <span className={styles.mobileStatsVal}>{stats.totalTrades}</span>
-                </div>
-                <div className={styles.mobileStatsCard}>
-                  <span className={styles.mobileStatsLabel}>Win Rate</span>
-                  <span className={styles.mobileStatsVal}>{formatPercent(stats.winRate)}</span>
-                </div>
-                <div className={styles.mobileStatsCard}>
-                  <span className={styles.mobileStatsLabel}>Net P&L</span>
-                  <span className={`${styles.mobileStatsVal} ${stats.netPnl >= 0 ? styles.mobileColorProfit : styles.mobileColorLoss}`}>
-                    {formatCurrency(stats.netPnl)}
-                  </span>
-                </div>
-                <div className={styles.mobileStatsCard}>
-                  <span className={styles.mobileStatsLabel}>Profit Factor</span>
-                  <span className={styles.mobileStatsVal}>
-                    {stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Closed Trades List */}
-              <h4 className={styles.mobileSectionTitle} style={{ marginTop: '1.25rem' }}>Trade History ({closedTrades.length})</h4>
-              {closedTrades.length === 0 ? (
-                <div className={styles.mobileEmptyState}>No closed trades yet.</div>
-              ) : (
-                <div className={styles.mobileHistoryList}>
-                  {closedTrades.map(trade => (
-                    <div key={trade.id} className={styles.mobileHistoryCard}>
-                      <div className={styles.mobileHistoryHeader}>
-                        <span style={{ fontWeight: 700, color: trade.type === 'BUY' ? '#10b981' : '#ef4444' }}>
-                          {trade.type} {trade.lotSize} Lots
-                        </span>
-                        <span className={(trade.pnl ?? 0) >= 0 ? styles.mobileColorProfit : styles.mobileColorLoss} style={{ fontWeight: 'bold' }}>
-                          {(trade.pnl ?? 0) >= 0 ? '+' : ''}{formatCurrency(trade.pnl ?? 0)}
-                        </span>
-                      </div>
-                      <div className={styles.mobileHistoryDetails}>
-                        <span>In: {formatPrice(trade.entryPrice, symbol)}</span>
-                        <span>Out: {formatPrice(trade.exitPrice ?? 0, symbol)}</span>
-                      </div>
-                      <div className={styles.mobileHistoryDetails} style={{ opacity: 0.5, fontSize: '0.68rem' }}>
-                        <span>Entry: {new Date(trade.entryTime * 1000).toLocaleTimeString()}</span>
-                        <span>Exit: {new Date((trade.exitTime ?? 0) * 1000).toLocaleTimeString()}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </main>
-
-        {/* ── MOBILE BOTTOM NAV BAR ── */}
-        <nav className={styles.mobileTabBar}>
-          <button
-            type="button"
-            className={`${styles.mobileTabItem} ${activeMobileTab === 'chart' ? styles.mobileTabItemActive : ''}`}
-            onClick={() => setActiveMobileTab('chart')}
-          >
-            <span style={{ fontSize: '1.2rem' }}>📊</span>
-            <span>Chart</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.mobileTabItem} ${activeMobileTab === 'trade' ? styles.mobileTabItemActive : ''}`}
-            onClick={() => setActiveMobileTab('trade')}
-          >
-            <span style={{ fontSize: '1.2rem' }}>⚡</span>
-            <span>Trade</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.mobileTabItem} ${activeMobileTab === 'positions' ? styles.mobileTabItemActive : ''}`}
-            onClick={() => setActiveMobileTab('positions')}
-          >
-            <span style={{ fontSize: '1.2rem' }}>💼</span>
-            <span>Open ({openPositions.length})</span>
-          </button>
-          <button
-            type="button"
-            className={`${styles.mobileTabItem} ${activeMobileTab === 'history' ? styles.mobileTabItemActive : ''}`}
-            onClick={() => setActiveMobileTab('history')}
-          >
-            <span style={{ fontSize: '1.2rem' }}>📜</span>
-            <span>History</span>
-          </button>
-        </nav>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.backtestContainer}>
       {isLoading && (
@@ -2454,7 +2069,7 @@ export default function BacktestPage() {
       {/* ── MAIN AREA ── */}
       <main className={styles.mainArea}>
         {/* ── LEFT PANEL ── */}
-        <aside className={styles.tradePanel}>
+        <aside className={`${styles.tradePanel} ${isOrderPanelOpen ? styles.orderPanelOpen : ''}`}>
 
           {/* Replay Controls */}
           <div className={styles.panelSection}>
@@ -2882,7 +2497,17 @@ export default function BacktestPage() {
       </main>
 
       {/* Bottom Session Tabs Panel */}
-      <footer className={`${styles.bottomPanel} ${isBottomPanelCollapsed ? styles.bottomPanelCollapsed : ''}`}>
+      <footer
+        className={`${styles.bottomPanel} ${isBottomPanelCollapsed ? styles.bottomPanelCollapsed : ''} ${isBottomSheetExpanded ? styles.bottomSheetExpanded : ''}`}
+      >
+        {/* Drag handle (mobile) — swipe up/down to expand/collapse */}
+        <div
+          className={styles.bottomSheetHandle}
+          onClick={toggleBottomSheet}
+          onTouchStart={handleBottomSheetTouchStart}
+          onTouchMove={handleBottomSheetTouchMove}
+          onTouchEnd={handleBottomSheetTouchEnd}
+        />
         <div className={styles.tabsHeader}>
           <div className={styles.tabsList}>
             <button
@@ -3172,6 +2797,23 @@ export default function BacktestPage() {
         onRemoveIndicator={handleRemoveIndicator}
         onUpdateIndicator={handleUpdateIndicator}
       />
+
+      {/* Mobile order-panel slide-over backdrop (tap to close) */}
+      <div
+        className={`${styles.orderPanelOverlay} ${isOrderPanelOpen ? styles.orderPanelOverlayVisible : ''}`}
+        onClick={() => setIsOrderPanelOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Mobile FAB — opens the order/replay panel */}
+      <button
+        type="button"
+        className={styles.orderPanelFab}
+        onClick={() => setIsOrderPanelOpen(true)}
+        aria-label="Open order panel"
+      >
+        ⚡
+      </button>
     </div>
   );
 }

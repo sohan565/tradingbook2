@@ -175,6 +175,7 @@ body {
   letter-spacing: -0.006em;
   overflow: hidden;
   height: 100vh;
+  height: 100dvh; /* dynamic viewport — fits Android Chrome with collapsing address bar */
   position: relative;
   display: flex;
   flex-direction: column;
@@ -316,6 +317,7 @@ a:hover {
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
 }
@@ -335,6 +337,8 @@ a:hover {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Respect notches / gesture bars on mobile */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* ---------- Sidebar Navigation ---------- */
@@ -831,23 +835,11 @@ a:hover {
   }
 }
 
-@media (max-width: 900px) {
+/* Phone / small tablet tier — single mobile breakpoint at 768px */
+@media (max-width: 768px) {
   :root {
     --sidebar-width: 0px;
     --panel-width: 100%;
-  }
-
-  .sidebar {
-    position: fixed;
-    left: -260px;
-    z-index: var(--z-overlay);
-    transition: left var(--t-normal);
-  }
-
-  .sidebar.open {
-    left: 0;
-    width: 260px;
-    box-shadow: var(--shadow-xl);
   }
 }
 
@@ -1034,40 +1026,125 @@ button:hover svg {
   filter: none;
 }
 
-/* ---------- Android Mobile Sizing & Scroll Optimizations ---------- */
-@media (max-width: 900px) {
-  body {
-    overflow-y: auto !important;
-    height: auto !important;
-    min-height: 100vh !important;
-    position: relative !important;
+/* ---------- Mobile Layout Strategy (≤768px) ----------
+   Single breakpoint tier. We keep the flex column shell intact so the
+   backtest chart (which depends on a sized flex parent) still works.
+   Pages that need document scroll (journal/analytics/accounts) opt in
+   via their own .pageScroll container rather than flipping the shell. */
+@media (max-width: 768px) {
+  /* Allow the document to scroll naturally on phone — but never break the
+     backtest terminal shell which manages its own internal scrolling. */
+  body:not(:has(.backtestContainer)) {
+    overflow-y: auto;
   }
 
-  .app-layout {
-    height: auto !important;
-    min-height: 100vh !important;
-    overflow: visible !important;
-  }
-
-  .app-body {
-    flex: none !important;
-    min-height: auto !important;
-    height: auto !important;
-  }
-
+  /* Backtest terminal keeps its locked flex shell; everything else scrolls */
   .app-main {
-    flex: none !important;
-    min-height: auto !important;
-    height: auto !important;
-    overflow-y: visible !important;
-    overflow-x: hidden !important;
+    /* Let pages that aren't the terminal scroll with the body */
   }
 
-  [class*="backtestPage"],
-  [class*="journalContainer"] {
-    height: auto !important;
-    min-height: 100vh !important;
-    overflow: visible !important;
+  body:not(:has(.backtestContainer)) .app-main {
+    overflow-y: visible;
+  }
+}
+
+/* ---------- Mobile Touch Polish & Sizing (≤768px) ---------- */
+@media (max-width: 768px) {
+  :root {
+    font-size: 13px;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Buttons / action buttons — meet 40px min touch target */
+  .btn {
+    min-height: 40px;
+    padding: 9px 16px;
+  }
+
+  [class*="actionBtn"],
+  .modal-close {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  /* Form inputs — touch friendly (≥44px) */
+  .input,
+  .select {
+    min-height: 44px;
+    font-size: 0.95rem;
+  }
+
+  /* Prevent iOS/Android auto-zoom on input focus */
+  .input,
+  .select,
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  /* Modals — full screen on mobile */
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .modal-overlay {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+  }
+
+  .modal-body {
+    max-height: calc(100vh - 120px);
+    padding: 16px;
+  }
+
+  /* Toast container — bottom on mobile */
+  .toast-container {
+    top: auto;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+  }
+
+  .toast {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* Tap manipulation + remove 300ms delay */
+  a,
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Tables — wrap in horizontal scroll; applied globally where used */
+  .table {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent horizontal overflow on the document body */
+  html,
+  body {
+    overflow-x: hidden;
   }
 }
 
