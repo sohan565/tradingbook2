@@ -13,7 +13,7 @@ import DrawingToolbar from '@/components/backtest/DrawingToolbar';
 import IndicatorPanel, { type ActiveIndicator, INDICATORS_REGISTRY } from '@/components/backtest/IndicatorPanel';
 import ObjectTreePanel from '@/components/backtest/ObjectTreePanel';
 import { parseHistDataCSV } from '@/lib/csv-parser';
-import { aggregateCandles } from '@/lib/aggregator';
+import { aggregateCandles, TIMEFRAME_SECONDS } from '@/lib/aggregator';
 
 // Dynamic import of the Chart component to prevent SSR errors (Lightweight Charts uses window/ResizeObserver)
 const Chart = dynamic(() => import('@/components/backtest/Chart'), {
@@ -184,6 +184,10 @@ export default function BacktestPage() {
   const [visibleCandles, setVisibleCandles] = useState<CandleData[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(49);
 
+  // Replay wall timestamp — the exact point in time the user has reached
+  // Used as source of truth when switching timeframes
+  const [replayTimestamp, setReplayTimestamp] = useState<number>(0);
+
   // Replay playback state
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(500);
@@ -212,6 +216,7 @@ export default function BacktestPage() {
   const balanceRef = useRef<number>(10000);
   const markersRef = useRef<ChartMarker[]>([]);
   const timeframeRef = useRef<Timeframe>('15m');
+  const replayTimestampRef = useRef<number>(0);
 
   // Sync refs with state to use in event loops without stale state
   useEffect(() => { visibleCandlesRef.current = visibleCandles; }, [visibleCandles]);
@@ -231,6 +236,29 @@ export default function BacktestPage() {
   useEffect(() => { balanceRef.current = balance; }, [balance]);
   useEffect(() => { markersRef.current = markers; }, [markers]);
   useEffect(() => { timeframeRef.current = timeframe; }, [timeframe]);
+  useEffect(() => { replayTimestampRef.current = replayTimestamp; }, [replayTimestamp]);
+
+  // Dynamically calculate final chart markers, appending a "Replay Start" indicator at the session starting candle
+  const finalMarkers = useMemo(() => {
+    if (allCandles.length === 0) return markers;
+    const initialIndex = getInitialReplayIndex(allCandles);
+    if (initialIndex < allCandles.length) {
+      const startCandle = allCandles[initialIndex];
+      const startMarker: ChartMarker = {
+        time: startCandle.time,
+        position: 'belowBar',
+        color: '#7c4dff', // Premium purple start marker
+        shape: 'arrowUp',
+        text: 'Replay Start',
+      };
+      // Prevent duplicates
+      const hasStartMarker = markers.some(m => m.time === startCandle.time && m.text === 'Replay Start');
+      if (!hasStartMarker) {
+        return [startMarker, ...markers];
+      }
+    }
+    return markers;
+  }, [markers, allCandles]);
 
   // ---- DRAWINGS & INDICATORS STATE & REFS ----
   const [activeTool, setActiveTool] = useState<string | null>(null);
@@ -460,6 +488,12 @@ export default function BacktestPage() {
         : 0;
       setVisibleCandles(dbAllCandles.length > 0 ? dbAllCandles.slice(0, restoredIndex + 1) : []);
       setCurrentIndex(restoredIndex);
+      // Restore replay wall timestamp from the restored candle position
+      if (dbAllCandles.length > 0 && restoredIndex < dbAllCandles.length) {
+        const resTf = (session.timeframe as Timeframe) || '15m';
+        const resTfSecs = TIMEFRAME_SECONDS[resTf] || 900;
+        setReplayTimestamp(dbAllCandles[restoredIndex].time + resTfSecs - 60);
+      }
       setBalance(session.currentBalance);
       setOpenPositions(dbOpenPositions);
       setClosedTrades(dbClosedTrades);
@@ -511,7 +545,7 @@ export default function BacktestPage() {
       let candles: CandleData[] = [];
 
       if (dataSource === 'server') {
-        // Fetch from server API
+        // Fetch aggregated candles from server API
         const params = new URLSearchParams({
           symbol: selectedSymbol,
           start: startDate,
@@ -526,6 +560,26 @@ export default function BacktestPage() {
         }
         candles = normalizeCandles(json.data ?? json.candles);
         debugLogCandles(candles, 'Server candles');
+
+        // Also fetch raw M1 candles for client-side timeframe re-aggregation
+        try {
+          const m1Params = new URLSearchParams({
+            symbol: selectedSymbol,
+            start: startDate,
+            end: endDate,
+            timeframe: '1m',
+            tzOffset: csvTimezoneOffset.toString(),
+          });
+          const m1Res = await fetch(`/api/market-data?${m1Params.toString()}`);
+          const m1Json = await m1Res.json();
+          if (m1Res.ok && (m1Json.data || m1Json.candles)) {
+            const m1Data = normalizeCandles(m1Json.data ?? m1Json.candles);
+            console.log('[BacktestEngine] Cached M1 candles for TF switching:', m1Data.length);
+            setRawM1Candles(m1Data);
+          }
+        } catch (m1Err) {
+          console.warn('[BacktestEngine] M1 cache fetch failed (TF switching will use API fallback):', m1Err);
+        }
       } else {
         // Parse uploaded CSV
         if (!uploadedFile) {
@@ -599,6 +653,9 @@ export default function BacktestPage() {
       console.log('[BacktestEngine] Setting visible candles from 0 to', initialIndex + 1, 'of', candles.length);
       setVisibleCandles(candles.slice(0, initialIndex + 1));
       setCurrentIndex(initialIndex);
+      // Set initial replay wall timestamp
+      const tfSecs = TIMEFRAME_SECONDS[timeframe] || 900;
+      setReplayTimestamp(candles[initialIndex].time + tfSecs - 60);
       setBalance(startingBalance);
       setOpenPositions([]);
       setClosedTrades([]);
@@ -929,7 +986,7 @@ export default function BacktestPage() {
       clearInterval(playIntervalRef.current);
     }
 
-    // Find closest candle index
+    // Find closest candle index (only consider past/current candles, not future)
     let closestIndex = 0;
     let closestDiff = Infinity;
     for (let i = 0; i < allCandles.length; i++) {
@@ -957,6 +1014,10 @@ export default function BacktestPage() {
     setVisibleCandles(allCandles.slice(0, closestIndex + 1));
     setIsJumpToBarActive(false);
 
+    // Update replay wall timestamp
+    const tfSecs = TIMEFRAME_SECONDS[timeframe] || 900;
+    setReplayTimestamp(allCandles[closestIndex].time + tfSecs - 60);
+
     // Save state
     autoSave(balance, closestIndex, nextOpenPositions, nextClosedTrades, timeframe, nextMarkers);
   };
@@ -975,21 +1036,15 @@ export default function BacktestPage() {
       clearInterval(playIntervalRef.current);
     }
 
-    // 2. Record current visible candle timestamp
-    const currentTimestamp = visibleCandlesRef.current.length > 0
-      ? visibleCandlesRef.current[visibleCandlesRef.current.length - 1].time
-      : 0;
-
-    let newCandles: CandleData[] = [];
+    // 2. Use the replay wall timestamp as the source of truth
+    const wallTimestamp = replayTimestampRef.current;
+    let m1Data = rawM1Candles;
 
     setIsLoading(true);
 
     try {
-      if (dataSource === 'upload' && rawM1Candles.length > 0) {
-        // 4. Re-aggregate raw M1 data client-side
-        newCandles = aggregateCandles(rawM1Candles, newTf);
-      } else {
-        // 3. Fetch from server API with new timeframe
+      // 3. Ensure we have M1 data (lazy fetch for server mode if not yet cached)
+      if (m1Data.length === 0 && dataSource === 'server') {
         let finalStart = startDate;
         let finalEnd = endDate;
 
@@ -1000,52 +1055,83 @@ export default function BacktestPage() {
           finalEnd = new Date(lastTime * 1000).toISOString().split('T')[0];
         }
 
-        const params = new URLSearchParams({
+        const m1Params = new URLSearchParams({
           symbol,
           start: finalStart,
           end: finalEnd,
-          timeframe: newTf,
+          timeframe: '1m',
         });
-        const res = await fetch(`/api/market-data?${params.toString()}`);
+        const res = await fetch(`/api/market-data?${m1Params.toString()}`);
         if (res.ok) {
           const json = await res.json();
-          newCandles = json.data || json.candles || json || [];
+          m1Data = normalizeCandles(json.data || json.candles || []);
+          setRawM1Candles(m1Data);
+          console.log('[TF Switch] Fetched and cached M1 data:', m1Data.length, 'candles');
         }
       }
 
-      if (newCandles.length === 0) {
+      if (m1Data.length === 0) {
+        console.error('[TF Switch] No M1 data available for re-aggregation');
         setIsLoading(false);
         return;
       }
 
-      // 5. Find the candle index closest to the recorded timestamp
-      let closestIndex = 0;
-      let closestDiff = Infinity;
-      for (let i = 0; i < newCandles.length; i++) {
-        const diff = Math.abs(newCandles[i].time - currentTimestamp);
-        if (diff < closestDiff) {
-          closestDiff = diff;
-          closestIndex = i;
+      // 4. Re-aggregate ALL M1 data to the new timeframe (full dataset for future replay)
+      const newAllCandles = aggregateCandles(m1Data, newTf);
+      if (newAllCandles.length === 0) {
+        setIsLoading(false);
+        return;
+      }
+
+      // 5. Filter M1 data to only the "revealed" portion, then aggregate
+      //    This naturally produces partial candles at the edge — better than TradingView
+      const revealedM1 = m1Data.filter(c => c.time <= wallTimestamp);
+      const visibleAggregated = aggregateCandles(revealedM1, newTf);
+
+      // 6. Map visible candles back to allCandles indices
+      const lastVisibleTime = visibleAggregated.length > 0
+        ? visibleAggregated[visibleAggregated.length - 1].time
+        : 0;
+      let newCurrentIndex = 0;
+      for (let i = 0; i < newAllCandles.length; i++) {
+        if (newAllCandles[i].time <= lastVisibleTime) {
+          newCurrentIndex = i;
+        } else {
+          break;
         }
       }
 
-      // Ensure at least 50 candles visible
-      const visibleEnd = Math.max(closestIndex, 49);
+      // 7. Build final visible array with partial edge candle.
+      //    We use map to construct a new array instead of direct index assignment
+      //    to avoid triggering false-positive React hook immutability lint rules.
+      const rawVisible = newAllCandles.slice(0, newCurrentIndex + 1);
+      const finalVisible = rawVisible.map((candle, idx) => {
+        if (idx === rawVisible.length - 1 && visibleAggregated.length > 0) {
+          const partialEdge = visibleAggregated[visibleAggregated.length - 1];
+          if (candle.time === partialEdge.time) {
+            return { ...partialEdge };
+          }
+        }
+        return { ...candle };
+      });
 
+      console.log(`[TF Switch] ${timeframe} → ${newTf} | wall=${wallTimestamp} | visible=${finalVisible.length}/${newAllCandles.length} candles`);
+
+      // 8. Update state — NO minimum candle clamp, replayTimestamp stays the same
       setTimeframe(newTf);
-      setAllCandles(newCandles);
-      setVisibleCandles(newCandles.slice(0, visibleEnd + 1));
-      setCurrentIndex(visibleEnd);
+      setAllCandles(newAllCandles);
+      setVisibleCandles(finalVisible);
+      setCurrentIndex(newCurrentIndex);
 
       // Auto-save the new timeframe and aggregated candles
       autoSave(
         balanceRef.current,
-        visibleEnd,
+        newCurrentIndex,
         openPositionsRef.current,
         closedTradesRef.current,
         newTf,
         markersRef.current,
-        newCandles
+        newAllCandles
       );
     } catch (err) {
       console.error('Error switching timeframe:', err);
@@ -1236,6 +1322,10 @@ export default function BacktestPage() {
     setVisibleCandles(candlesList.slice(0, nextIndex + 1));
     setCurrentIndex(nextIndex);
 
+    // Update replay wall timestamp to the end of this candle's time period
+    const tfSecs = TIMEFRAME_SECONDS[timeframeRef.current] || 900;
+    setReplayTimestamp(nextCandle.time + tfSecs - 60);
+
     // If not playing, autoSave immediately (candle-by-candle step)
     if (!isPlaying) {
       autoSave(nextBal, nextIndex, nextOpenPositions, nextClosed, timeframeRef.current, nextMkrs);
@@ -1243,6 +1333,88 @@ export default function BacktestPage() {
 
     return true;
   }, [isPlaying]);
+
+  // Execute Step Backward (Rewind 1 candle)
+  const stepBackward = useCallback(() => {
+    setIsPlaying(false);
+    if (playIntervalRef.current) {
+      clearInterval(playIntervalRef.current);
+    }
+
+    const prevIndex = currentIndexRef.current - 1;
+    const candlesList = allCandlesRef.current;
+    const initialIndex = getInitialReplayIndex(candlesList);
+
+    if (prevIndex < initialIndex) {
+      return;
+    }
+
+    const prevCandle = candlesList[prevIndex];
+    const cutoffTime = prevCandle.time;
+
+    // 1. Filter open positions that were opened after cutoff time
+    const nextOpenPositions = openPositionsRef.current.filter(p => p.entryTime <= cutoffTime);
+
+    // 2. Filter closed trades and restore any that closed after cutoff time
+    const restoredPositions = [...nextOpenPositions];
+    const nextClosedTrades = closedTradesRef.current.filter(t => {
+      if ((t.exitTime ?? 0) > cutoffTime) {
+        // Only restore if the trade was originally opened before/at cutoffTime
+        if (t.entryTime <= cutoffTime) {
+          const { pnl: upnl, pips: upips } = calculateUnrealizedPnL(
+            t.entryPrice,
+            prevCandle.close,
+            t.lotSize,
+            t.type,
+            t.symbol
+          );
+          const originalPos: OpenPosition = {
+            id: t.id,
+            symbol: t.symbol,
+            type: t.type,
+            lotSize: t.lotSize,
+            entryPrice: t.entryPrice,
+            entryTime: t.entryTime,
+            stopLoss: t.stopLoss,
+            takeProfit: t.takeProfit,
+            currentPrice: prevCandle.close,
+            unrealizedPnl: upnl,
+            unrealizedPips: upips,
+          };
+          restoredPositions.push(originalPos);
+        }
+        return false; // Exclude from closedTrades
+      }
+      return true; // Keep in closedTrades
+    });
+
+    // 3. Revert balance (deduct realized P&L of reverted trades)
+    let balanceDiff = 0;
+    for (const t of closedTradesRef.current) {
+      if ((t.exitTime ?? 0) > cutoffTime) {
+        balanceDiff += t.pnl ?? 0;
+      }
+    }
+    const nextBal = balanceRef.current - balanceDiff;
+
+    // 4. Filter markers to only those up to cutoffTime
+    const nextMarkers = markersRef.current.filter(m => m.time <= cutoffTime);
+
+    // 5. Update state
+    setBalance(nextBal);
+    setClosedTrades(nextClosedTrades);
+    setOpenPositions(restoredPositions);
+    setMarkers(nextMarkers);
+    setCurrentIndex(prevIndex);
+    setVisibleCandles(candlesList.slice(0, prevIndex + 1));
+
+    // Update replay wall timestamp
+    const tfSecs = TIMEFRAME_SECONDS[timeframeRef.current] || 900;
+    setReplayTimestamp(prevCandle.time + tfSecs - 60);
+
+    // Auto-save immediately
+    autoSave(nextBal, prevIndex, restoredPositions, nextClosedTrades, timeframeRef.current, nextMarkers);
+  }, []);
 
   // Sync Timer for Play/Pause
   useEffect(() => {
@@ -1290,6 +1462,10 @@ export default function BacktestPage() {
       setOpenPositions([]);
       setClosedTrades([]);
       setMarkers([]);
+
+      // Reset replay wall timestamp
+      const tfSecs = TIMEFRAME_SECONDS[timeframe] || 900;
+      setReplayTimestamp(allCandles[resetIndex].time + tfSecs - 60);
       
       autoSave(startingBalance, resetIndex, [], [], timeframe, []);
     }
@@ -1317,6 +1493,10 @@ export default function BacktestPage() {
         e.preventDefault();
         setIsPlaying(false);
         stepForward();
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        setIsPlaying(false);
+        stepBackward();
       } else if (e.code === 'KeyR') {
         e.preventDefault();
         handleReset();
@@ -1328,7 +1508,7 @@ export default function BacktestPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [stepForward, sessionStatus, handleUndo, handleRedo, handleReset]);
+  }, [stepForward, stepBackward, sessionStatus, handleUndo, handleRedo, handleReset]);
 
   // Play/Pause toggler
   const handleTogglePlay = () => {
@@ -2099,6 +2279,9 @@ export default function BacktestPage() {
                     </>
                   )}
                 </button>
+                <button className={styles.stepBtn} onClick={stepBackward} title="Step Backward (ArrowLeft)">
+                  <span>⏮</span> Back
+                </button>
                 <button className={styles.stepBtn} onClick={() => { setIsPlaying(false); stepForward(); }} title="Step Forward (ArrowRight)">
                   <span>⏭</span> Step
                 </button>
@@ -2451,7 +2634,7 @@ export default function BacktestPage() {
                   ref={chartComponentRef}
                   chartType={chartType}
                   candles={visibleCandles}
-                  markers={markers}
+                  markers={finalMarkers}
                   positions={openPositions}
                   symbol={symbol}
                   onCrosshairMove={setHoverOhlc}

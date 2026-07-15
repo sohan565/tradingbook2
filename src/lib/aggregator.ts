@@ -10,7 +10,7 @@ import type { CandleData, Timeframe } from '@/types';
 // ---------- Timeframe Constants ----------
 
 /** Map each timeframe to its bucket duration in seconds. */
-const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
+export const TIMEFRAME_SECONDS: Record<Timeframe, number> = {
   '1m':  60,
   '5m':  300,
   '15m': 900,
