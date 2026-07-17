@@ -1883,23 +1883,32 @@ export default function BacktestPage() {
                 <div className={styles.wizardInputGroup} style={{ marginTop: '1rem' }}>
                   <label>Chart Timeframe</label>
                 </div>
-                <div className={styles.selectorWrapper} style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+                <div className={styles.selectorWrapper} style={{
+                  display: 'flex',
+                  gap: '2px',
+                  background: 'var(--term-input, #101014)',
+                  padding: '3px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--term-border, rgba(255, 255, 255, 0.06))',
+                  alignSelf: 'flex-start',
+                  marginBottom: '0.75rem'
+                }}>
                   {TIMEFRAMES.map(tf => (
                     <button
                       key={tf.key}
                       type="button"
                       onClick={() => setTimeframe(tf.key)}
                       style={{
-                        padding: '0.3rem 0.7rem',
+                        padding: '0.35rem 0.85rem',
                         borderRadius: '6px',
-                        border: timeframe === tf.key ? '1px solid var(--accent)' : '1px solid rgba(255,255,255,0.1)',
-                        background: timeframe === tf.key ? 'rgba(0,229,255,0.12)' : 'rgba(255,255,255,0.03)',
-                        color: timeframe === tf.key ? 'var(--accent)' : 'var(--text-secondary)',
+                        border: 'none',
+                        background: timeframe === tf.key ? 'var(--term-card, #1c1c24)' : 'transparent',
+                        color: timeframe === tf.key ? 'var(--term-text, #ffffff)' : 'var(--term-text-3, #7a7a85)',
                         cursor: 'pointer',
-                        fontSize: '0.82rem',
-                        fontWeight: timeframe === tf.key ? 700 : 400,
-                        fontFamily: 'var(--font-mono)',
-                        transition: 'all 0.15s ease',
+                        fontSize: '0.8rem',
+                        fontWeight: timeframe === tf.key ? '600' : '500',
+                        fontFamily: 'var(--font-sans)',
+                        transition: 'all 0.1s ease',
                       }}
                     >
                       {tf.label}
@@ -2156,15 +2165,35 @@ export default function BacktestPage() {
           <div className={styles.topBarDivider} />
 
           {/* Timeframes */}
-          {TIMEFRAMES.map(tf => (
-            <button
-              key={tf.key}
-              className={`${styles.timeframeBtn} ${timeframe === tf.key ? styles.activeTimeframe : ''}`}
-              onClick={() => handleTimeframeChange(tf.key)}
-            >
-              {tf.label}
-            </button>
-          ))}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            background: 'var(--term-input, #101014)',
+            padding: '2px',
+            borderRadius: '6px',
+            border: '1px solid var(--term-border, rgba(255, 255, 255, 0.06))'
+          }}>
+            {TIMEFRAMES.map(tf => (
+              <button
+                key={tf.key}
+                className={`${styles.timeframeBtn} ${timeframe === tf.key ? styles.activeTimeframe : ''}`}
+                onClick={() => handleTimeframeChange(tf.key)}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.78rem',
+                  fontWeight: timeframe === tf.key ? '600' : '500',
+                  color: timeframe === tf.key ? 'var(--term-text, #ffffff)' : 'var(--term-text-3, #7a7a85)',
+                  background: timeframe === tf.key ? 'var(--term-card, #1c1c24)' : 'transparent',
+                  border: 'none',
+                  transition: 'all 0.1s ease',
+                }}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
 
           <div className={styles.topBarDivider} />
 
@@ -2263,42 +2292,62 @@ export default function BacktestPage() {
               </span>
             </h3>
             <div className={styles.replayControlsCard}>
-              <div className={styles.controlButtons}>
+              <div className={styles.controlButtons} style={{ display: 'flex', gap: '4px', alignItems: 'center', width: '100%' }}>
+                <button
+                  className={styles.stepBtn}
+                  onClick={handleReset}
+                  title="Reset session to Start (R)"
+                  style={{ flex: 1, padding: 0, justifyContent: 'center', height: '34px' }}
+                >
+                  <span>⏮</span>
+                </button>
+                <button
+                  className={styles.stepBtn}
+                  onClick={stepBackward}
+                  title="Step Backward 1 bar (ArrowLeft)"
+                  style={{ flex: 1, padding: 0, justifyContent: 'center', height: '34px' }}
+                >
+                  <span>⏪</span>
+                </button>
                 <button
                   className={styles.playBtn}
                   onClick={handleTogglePlay}
-                  style={{ backgroundColor: isPlaying ? 'rgba(239, 68, 68, 0.8)' : '#6366f1' }}
+                  style={{
+                    backgroundColor: isPlaying ? 'var(--term-accent, #7d79f2)' : 'rgba(255,255,255,0.04)',
+                    border: isPlaying ? '1px solid var(--term-accent, #7d79f2)' : '1px solid var(--term-border-strong, rgba(255,255,255,0.11))',
+                    color: isPlaying ? '#ffffff' : 'var(--term-text-2, #a9a9b3)',
+                    height: '34px',
+                    flex: 1.5,
+                    padding: 0,
+                    justifyContent: 'center'
+                  }}
+                  title={isPlaying ? "Pause Playback (Space)" : "Play Replay (Space)"}
                 >
-                  {isPlaying ? (
-                    <>
-                      <span>⏸</span> Pause
-                    </>
-                  ) : (
-                    <>
-                      <span>▶</span> Play
-                    </>
-                  )}
+                  {isPlaying ? <span>⏸</span> : <span>▶</span>}
                 </button>
-                <button className={styles.stepBtn} onClick={stepBackward} title="Step Backward (ArrowLeft)">
-                  <span>⏮</span> Back
-                </button>
-                <button className={styles.stepBtn} onClick={() => { setIsPlaying(false); stepForward(); }} title="Step Forward (ArrowRight)">
-                  <span>⏭</span> Step
+                <button
+                  className={styles.stepBtn}
+                  onClick={() => { setIsPlaying(false); stepForward(); }}
+                  title="Step Forward 1 bar (ArrowRight)"
+                  style={{ flex: 1, padding: 0, justifyContent: 'center', height: '34px' }}
+                >
+                  <span>⏭</span>
                 </button>
                 <button
                   className={styles.stepBtn}
                   onClick={() => setIsJumpToBarActive(!isJumpToBarActive)}
                   title="Jump to Bar (Click a candle to jump)"
                   style={{
-                    backgroundColor: isJumpToBarActive ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255, 255, 255, 0.03)',
-                    border: isJumpToBarActive ? '1px solid var(--accent, #00e5ff)' : '1px solid rgba(255, 255, 255, 0.1)',
-                    color: isJumpToBarActive ? 'var(--accent, #00e5ff)' : 'var(--text-secondary, #94a3b8)',
+                    flex: 1,
+                    padding: 0,
+                    justifyContent: 'center',
+                    height: '34px',
+                    backgroundColor: isJumpToBarActive ? 'rgba(125, 121, 242, 0.16)' : 'rgba(255, 255, 255, 0.04)',
+                    border: isJumpToBarActive ? '1px solid var(--term-accent, #7d79f2)' : '1px solid var(--term-border-strong, rgba(255, 255, 255, 0.11))',
+                    color: isJumpToBarActive ? 'var(--term-accent-light, #8f8bf5)' : 'var(--term-text-2, #a9a9b3)',
                   }}
                 >
-                  📍 Jump
-                </button>
-                <button className={styles.resetBtn} onClick={handleReset} title="Reset session (R)">
-                  <span>🔄</span>
+                  <span>📍</span>
                 </button>
               </div>
 

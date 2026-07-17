@@ -1216,7 +1216,7 @@
 .tabButton:hover { color: var(--term-text-2); }
 .activeTabButton {
   color: var(--term-text);
-  border-bottom-color: var(--term-accent);
+  border-bottom-color: var(--term-text);
 }
 
 .saveStatusIndicator {
