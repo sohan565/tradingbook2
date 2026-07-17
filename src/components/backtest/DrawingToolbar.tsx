@@ -100,7 +100,7 @@ export default function DrawingToolbar({
           <rect x="3" y="3" width="18" height="18" rx="2" />
         </svg>
       ),
-      shortcut: 'Alt+R',
+      shortcut: 'Alt+E',
     },
     {
       id: 'triangle',
@@ -208,7 +208,7 @@ export default function DrawingToolbar({
       } else if (key === 'f') {
         e.preventDefault();
         onSelectTool('fib-retracement');
-      } else if (key === 'r') {
+      } else if (key === 'e') {
         e.preventDefault();
         onSelectTool('rectangle');
       } else if (key === 'a') {

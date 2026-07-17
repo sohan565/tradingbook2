@@ -1498,6 +1498,9 @@ export default function BacktestPage() {
         e.preventDefault();
         setIsPlaying(false);
         stepBackward();
+      } else if (e.altKey && e.code === 'KeyR') {
+        e.preventDefault();
+        chartComponentRef.current?.resetZoom();
       } else if (e.code === 'KeyR') {
         e.preventDefault();
         handleReset();
@@ -2286,7 +2289,7 @@ export default function BacktestPage() {
             <h3 className={styles.panelTitle} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Replay Control</span>
               <span 
-                title="Keyboard Shortcuts:&#10;• Space - Play/Pause replay&#10;• ArrowRight - Step forward 1 bar&#10;• R - Reset replay session&#10;• Ctrl+Z - Undo drawing&#10;• Ctrl+Y - Redo drawing&#10;• Alt+T - Trend Line tool&#10;• Alt+H - Horizontal Line tool&#10;• Alt+V - Vertical Line tool&#10;• Alt+F - Fib Retracement tool&#10;• Alt+R - Rectangle tool&#10;• Alt+A - Text Annotation tool&#10;• Alt+P - Path tool&#10;• Alt+M - Measure tool&#10;• Alt+C - Clear active drawing tool" 
+                title="Keyboard Shortcuts:&#10;• Space - Play/Pause replay&#10;• ArrowRight - Step forward 1 bar&#10;• R - Reset replay session&#10;• Ctrl+Z - Undo drawing&#10;• Ctrl+Y - Redo drawing&#10;• Alt+T - Trend Line tool&#10;• Alt+H - Horizontal Line tool&#10;• Alt+V - Vertical Line tool&#10;• Alt+F - Fib Retracement tool&#10;• Alt+E - Rectangle tool&#10;• Alt+R - Reset chart zoom&#10;• Alt+A - Text Annotation tool&#10;• Alt+P - Path tool&#10;• Alt+M - Measure tool&#10;• Alt+C - Clear active drawing tool" 
                 style={{ cursor: 'help', fontSize: '0.72rem', opacity: 0.6, fontWeight: 'normal', color: 'var(--text-secondary)' }}
               >
                 ℹ️ Shortcuts

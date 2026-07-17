@@ -81,6 +81,7 @@ export interface ChartRef {
   removeDrawing: (id: string) => void;
   clearDrawings: () => void;
   toggleFullscreen: () => void;
+  resetZoom: () => void;
 }
 
 const PANEL_INDICATORS = ['RSI', 'MACD', 'ATR', 'Stochastic', 'CCI', 'OBV', 'MFI', 'ADX', 'Aroon', 'WilliamsPercentRange', 'ChaikinMF', 'Momentum', 'ROC'];
@@ -253,6 +254,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
           document.exitFullscreen();
         }
       }
+    },
+    resetZoom: () => {
+      chartRef.current?.timeScale().fitContent();
     }
   }));
 
