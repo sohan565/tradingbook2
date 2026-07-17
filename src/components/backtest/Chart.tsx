@@ -951,6 +951,12 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
           dragAnchorIndex = anchorIndex;
           dragAnchorDrawing = selected;
           originalAnchors = selected.anchors.map((a: any) => ({ ...a }));
+
+          // Disable chart scrolling during anchor dragging
+          chart.applyOptions({
+            handleScroll: false
+          });
+
           return; // Let library handle anchor dragging
         }
       }
@@ -994,6 +1000,11 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         if (containerRef.current) {
           containerRef.current.setAttribute('data-dragging-drawing', 'true');
         }
+
+        // Disable chart scrolling during body dragging
+        chart.applyOptions({
+          handleScroll: false
+        });
 
         // Stop chart from panning
         e.stopPropagation();
@@ -1099,6 +1110,19 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         dragAnchorIndex = null;
         dragAnchorDrawing = null;
         originalAnchors = [];
+
+        // Re-enable chart scrolling
+        chart.applyOptions({
+          handleScroll: activeToolRef.current
+            ? false
+            : {
+                mouseWheel: true,
+                pressedMouseMove: true,
+                horzTouchDrag: true,
+                vertTouchDrag: true,
+              }
+        });
+
         if (onDrawingChange) {
           const all = drawingManager.exportDrawings().filter((d: any) => d.id !== 'preview');
           onDrawingChange(all);
@@ -1107,6 +1131,19 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
       if (isDraggingBody) {
         isDraggingBody = false;
+
+        // Re-enable chart scrolling
+        chart.applyOptions({
+          handleScroll: activeToolRef.current
+            ? false
+            : {
+                mouseWheel: true,
+                pressedMouseMove: true,
+                horzTouchDrag: true,
+                vertTouchDrag: true,
+              }
+        });
+
         if (dragDrawing && onDrawingChange) {
           // Trigger drawing change callback to save the updated drawing to state and database
           const all = drawingManager.exportDrawings().filter((d: any) => d.id !== 'preview');
