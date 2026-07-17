@@ -21,6 +21,7 @@ import type {
 import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay } from '@/types';
 import styles from './Chart.module.css';
 import { computeHeikinAshi } from '@/lib/heikin-ashi';
+import { TIMEFRAME_SECONDS } from '@/lib/aggregator';
 
 // Import Drawing tools from lightweight-charts-drawing
 import {
@@ -72,6 +73,7 @@ interface ChartProps {
   onJumpToBar?: (timestamp: number) => void;
   onSelectTool?: (tool: string | null) => void;
   timeframe?: string;
+  isZoomLocked?: boolean;
 }
 
 export interface ChartRef {
@@ -174,7 +176,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   onJumpToBar,
   onSelectTool,
   timeframe,
+  isZoomLocked = true,
 }: ChartProps, ref) {
+  const isShiftPressedRef = useRef(false);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
   const [contextMenuState, setContextMenuState] = useState<{ x: number; y: number; drawingId: string } | null>(null);
   const [settingsModalId, setSettingsModalId] = useState<string | null>(null);
@@ -412,13 +416,33 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       }
 
       const toolType = activeToolRef.current;
-      if (!toolType || !param.point || param.time === undefined) {
+      if (!toolType || !param.point) {
+        return;
+      }
+
+      let time = param.time;
+      if (time === undefined && param.point) {
+        const timeScale = chart.timeScale();
+        const logicalIndex = timeScale.coordinateToLogical(param.point.x);
+        if (logicalIndex !== null && candles.length > 0) {
+          const lastCandle = candles[candles.length - 1];
+          const lastCandleLogical = timeScale.timeToCoordinate(lastCandle.time as any) !== null 
+            ? timeScale.coordinateToLogical(timeScale.timeToCoordinate(lastCandle.time as any)!)
+            : candles.length - 1;
+          
+          if (lastCandleLogical !== null) {
+            const tfSecs = (TIMEFRAME_SECONDS as any)[timeframe || '15m'] || 900;
+             time = ((lastCandle.time as number) + Math.round(logicalIndex - lastCandleLogical) * tfSecs) as any;
+          }
+        }
+      }
+
+      if (time === undefined) {
         return;
       }
 
       let price = candleSeries.coordinateToPrice(param.point.y);
       if (price === null) return;
-      const time = param.time;
 
       // Snapping / Magnet Mode
       if (isMagnetModeRef.current) {
@@ -850,18 +874,54 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     let startLogical: number | null = null;
     let startPrice: number | null = null;
 
+    let isDraggingAnchor = false;
+    let dragAnchorIndex: number | null = null;
+    let dragAnchorDrawing: any = null;
+    let originalAnchors: Anchor[] = [];
+
     const timeScale = chart.timeScale();
 
-    const timeToLogical = (t: number): any => {
-      const coord = timeScale.timeToCoordinate(t as any);
-      if (coord === null) return null;
-      return timeScale.coordinateToLogical(coord);
+    const getLastCandleLogical = () => {
+      if (candles.length === 0) return null;
+      const lastCandle = candles[candles.length - 1];
+      const coord = timeScale.timeToCoordinate(lastCandle.time as any);
+      if (coord !== null) {
+        return timeScale.coordinateToLogical(coord);
+      }
+      return candles.length - 1;
     };
 
-    const logicalToTime = (l: any): any => {
+    const timeToLogical = (t: number): number | null => {
+      const coord = timeScale.timeToCoordinate(t as any);
+      if (coord !== null) {
+        return timeScale.coordinateToLogical(coord);
+      }
+      if (candles.length > 0) {
+        const lastCandle = candles[candles.length - 1];
+        const lastLogical = getLastCandleLogical();
+        if (lastLogical !== null) {
+          const tfSecs = (TIMEFRAME_SECONDS as any)[timeframe || '15m'] || 900;
+          return lastLogical + Math.round((t - (lastCandle.time as number)) / tfSecs);
+        }
+      }
+      return null;
+    };
+
+    const logicalToTime = (l: number): number | null => {
       const coord = timeScale.logicalToCoordinate(l as any);
-      if (coord === null) return null;
-      return timeScale.coordinateToTime(coord);
+      if (coord !== null) {
+        const time = timeScale.coordinateToTime(coord);
+        if (time !== null) return time as number;
+      }
+      if (candles.length > 0) {
+        const lastCandle = candles[candles.length - 1];
+        const lastLogical = getLastCandleLogical();
+        if (lastLogical !== null) {
+          const tfSecs = (TIMEFRAME_SECONDS as any)[timeframe || '15m'] || 900;
+           return (lastCandle.time as number) + Math.round(l - lastLogical) * tfSecs;
+        }
+      }
+      return null;
     };
 
     const handleBodyPointerDown = (e: PointerEvent) => {
@@ -878,11 +938,15 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       };
 
       // Check if we hit an anchor of the currently selected drawing.
-      // If yes, let the DrawingManager handle it.
+      // If yes, let the DrawingManager handle it but register tracking for Shift snapping.
       const selected = drawingManager.getSelectedDrawing();
       if (selected) {
         const anchorIndex = drawingManager.hitTestAnchor(pt);
         if (anchorIndex !== null) {
+          isDraggingAnchor = true;
+          dragAnchorIndex = anchorIndex;
+          dragAnchorDrawing = selected;
+          originalAnchors = selected.anchors.map((a: any) => ({ ...a }));
           return; // Let library handle anchor dragging
         }
       }
@@ -934,6 +998,56 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     };
 
     const handleBodyPointerMove = (e: PointerEvent) => {
+      // 1. Shift key anchor dragging constraint (horizontal-only / vertical-only)
+      if (isDraggingAnchor && dragAnchorDrawing && dragAnchorIndex !== null) {
+        if (isShiftPressedRef.current && originalAnchors[dragAnchorIndex]) {
+          const rect = containerRef.current!.getBoundingClientRect();
+          const pt = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+          };
+          
+          const currentLogical = timeScale.coordinateToLogical(pt.x);
+          const currentPrice = candleSeries.coordinateToPrice(pt.y);
+          
+          if (currentLogical !== null && currentPrice !== null) {
+            const origAnchor = originalAnchors[dragAnchorIndex];
+            const origLogical = timeToLogical(origAnchor.time as number);
+            
+            if (origLogical !== null) {
+              const origY = candleSeries.priceToCoordinate(origAnchor.price);
+              if (origY !== null) {
+                const dy = pt.y - origY;
+                const dx = pt.x - timeScale.logicalToCoordinate(origLogical as any)!;
+                
+                let targetTime = origAnchor.time;
+                let targetPrice = origAnchor.price;
+                
+                if (Math.abs(dx) > Math.abs(dy)) {
+                  // Moved more horizontally -> lock price (Horizontal Resize Only)
+                  const targetLogical = currentLogical;
+                  const t = logicalToTime(targetLogical);
+                   if (t !== null) targetTime = t as any;
+                  targetPrice = origAnchor.price;
+                } else {
+                  // Moved more vertically -> lock time (Vertical Resize Only)
+                  targetTime = origAnchor.time;
+                  targetPrice = currentPrice;
+                }
+                
+                // Update the anchor in the drawing!
+                dragAnchorDrawing.updateAnchor(dragAnchorIndex, { time: targetTime, price: targetPrice });
+                dragAnchorDrawing.requestUpdate();
+                
+                e.stopPropagation();
+                e.preventDefault();
+                return;
+              }
+            }
+          }
+        }
+      }
+
       if (!isDraggingBody || !dragDrawing || !startPoint || startLogical === null || startPrice === null) return;
 
       const rect = containerRef.current!.getBoundingClientRect();
@@ -976,6 +1090,17 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     };
 
     const handleBodyPointerUp = (e: PointerEvent) => {
+      if (isDraggingAnchor) {
+        isDraggingAnchor = false;
+        dragAnchorIndex = null;
+        dragAnchorDrawing = null;
+        originalAnchors = [];
+        if (onDrawingChange) {
+          const all = drawingManager.exportDrawings().filter((d: any) => d.id !== 'preview');
+          onDrawingChange(all);
+        }
+      }
+
       if (isDraggingBody) {
         isDraggingBody = false;
         if (dragDrawing && onDrawingChange) {
@@ -1018,12 +1143,25 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       }
     };
 
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        isShiftPressedRef.current = true;
+      }
+    };
+    const handleGlobalKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        isShiftPressedRef.current = false;
+      }
+    };
+
     // Register event listeners (Pointer Events = mouse + touch + pen)
     container.addEventListener('pointerdown', handleBodyPointerDown, true);
     container.addEventListener('pointermove', handlePointerMoveHover, true);
     container.addEventListener('contextmenu', handleContextMenu, true);
     window.addEventListener('pointermove', handleBodyPointerMove, true);
     window.addEventListener('pointerup', handleBodyPointerUp, true);
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    window.addEventListener('keyup', handleGlobalKeyUp, true);
 
     // Register double click listener
     container.addEventListener('dblclick', handleDblClick);
@@ -1046,6 +1184,8 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('pointermove', handleBodyPointerMove, true);
       window.removeEventListener('pointerup', handleBodyPointerUp, true);
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
+      window.removeEventListener('keyup', handleGlobalKeyUp, true);
       resizeObserver.disconnect();
       unsubs.forEach((unsub) => unsub());
       chart.unsubscribeClick(handleDrawingClick);
@@ -1408,11 +1548,18 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     const sessionChanged = sessionKey !== undefined && sessionKey !== prevSessionKeyRef.current;
     const dataChanged = newSignature !== dataSignatureRef.current;
 
-    if (dataChanged || sessionChanged) {
-      // New data or new session — always fit the viewport so CSV data is visible
+    if (sessionChanged) {
+      // Full reset / fit content for a brand new session
       chartRef.current?.timeScale().fitContent();
-      dataSignatureRef.current = newSignature;
       prevSessionKeyRef.current = sessionKey;
+      dataSignatureRef.current = newSignature;
+    } else if (dataChanged) {
+      // New candle generated during active replay
+      if (isZoomLocked) {
+        // Keep the latest candle in view but preserve user's zoom level
+        chartRef.current?.timeScale().scrollToPosition(0, true);
+      }
+      dataSignatureRef.current = newSignature;
     }
 
     // Apply markers if any

@@ -191,6 +191,7 @@ export default function BacktestPage() {
   // Replay playback state
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [speed, setSpeed] = useState<number>(500);
+  const [isZoomLocked, setIsZoomLocked] = useState<boolean>(true);
 
   // Trading state
   const [balance, setBalance] = useState<number>(10000);
@@ -2698,6 +2699,7 @@ export default function BacktestPage() {
                   onJumpToBar={handleJumpToBar}
                   onSelectTool={setActiveTool}
                   timeframe={timeframe}
+                  isZoomLocked={isZoomLocked}
                 />
 
                 {/* Display Timezone Selector Overlay */}
@@ -2777,6 +2779,27 @@ export default function BacktestPage() {
               {saveStatus === 'saved' && <span style={{ color: '#10b981' }}>✓ Changes saved</span>}
               {saveStatus === 'error' && <span style={{ color: '#ef4444' }}>❌ Save failed</span>}
             </div>
+
+            <button
+              onClick={() => setIsZoomLocked(!isZoomLocked)}
+              title={isZoomLocked ? "Zoom is Locked (Auto-scrolls to latest candle on replay)" : "Zoom is Unlocked (Allows manual zoom/pan during replay)"}
+              style={{
+                background: isZoomLocked ? 'rgba(125, 121, 242, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                border: isZoomLocked ? '1px solid var(--term-accent, #7d79f2)' : '1px solid var(--term-border, rgba(255, 255, 255, 0.08))',
+                color: isZoomLocked ? 'var(--term-accent-light, #8f8bf5)' : 'var(--term-text-3, #7a7a85)',
+                padding: '0.2rem 0.6rem',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'all 0.12s ease',
+              }}
+            >
+              {isZoomLocked ? '🔒 Zoom Locked' : '🔓 Zoom Unlocked'}
+            </button>
 
             <button
               className={styles.collapseTabBtn}
