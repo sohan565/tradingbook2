@@ -207,6 +207,14 @@ export default function BacktestPage() {
   // Crosshair / hover metrics
   const [hoverOhlc, setHoverOhlc] = useState<OHLCDisplay | null>(null);
 
+  // Position Modification & Close State
+  const [activeCloseMenuId, setActiveCloseMenuId] = useState<string | null>(null);
+  const [partialClosePercent, setPartialClosePercent] = useState<number>(50);
+  const [editingSLId, setEditingSLId] = useState<string | null>(null);
+  const [editingTPId, setEditingTPId] = useState<string | null>(null);
+  const [tempSL, setTempSL] = useState<string>('');
+  const [tempTP, setTempTP] = useState<string>('');
+
   // Timer reference for playback
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visibleCandlesRef = useRef<CandleData[]>([]);
@@ -1589,21 +1597,26 @@ export default function BacktestPage() {
   };
 
   // Close Position Manually
-  const handleClosePosition = (id: string) => {
+  const handleClosePosition = (id: string, closePercent: number = 100) => {
     const position = openPositions.find(p => p.id === id);
     if (!position || visibleCandles.length === 0) return;
 
     const currentCandle = visibleCandles[visibleCandles.length - 1];
     const exitPrice = currentCandle.close;
 
-    const tradePnL = calculatePnL(position.entryPrice, exitPrice, position.lotSize, position.type, position.symbol);
+    const closedLots = position.lotSize * (closePercent / 100);
+    const remainingLots = position.lotSize - closedLots;
+
+    const tradePnL = calculatePnL(position.entryPrice, exitPrice, closedLots, position.type, position.symbol);
     const tradePnLPips = calculatePnLPips(position.entryPrice, exitPrice, position.type, position.symbol);
 
+    const isFullClose = closePercent === 100;
+
     const closedRecord: TradeRecord = {
-      id: position.id,
+      id: isFullClose ? position.id : generateId(),
       symbol: position.symbol,
       type: position.type,
-      lotSize: position.lotSize,
+      lotSize: closedLots,
       entryPrice: position.entryPrice,
       entryTime: position.entryTime,
       exitPrice,
@@ -1616,12 +1629,27 @@ export default function BacktestPage() {
       swap: 0,
       status: 'closed',
       source: 'backtest',
+      comment: isFullClose ? undefined : `Partial Close (${closePercent}%)`,
       tags: [],
     };
 
     const nextBalance = balance + tradePnL;
     const nextClosed = [...closedTrades, closedRecord];
-    const nextOpen = openPositions.filter(p => p.id !== id);
+    
+    let nextOpen: OpenPosition[];
+    if (isFullClose) {
+      nextOpen = openPositions.filter(p => p.id !== id);
+    } else {
+      nextOpen = openPositions.map(p => {
+        if (p.id === id) {
+          return {
+            ...p,
+            lotSize: remainingLots,
+          };
+        }
+        return p;
+      });
+    }
 
     setBalance(nextBalance);
     setClosedTrades(nextClosed);
@@ -1634,7 +1662,9 @@ export default function BacktestPage() {
       position: position.type === 'BUY' ? 'aboveBar' : 'belowBar',
       color: tradePnL >= 0 ? '#10b981' : '#ef4444',
       shape: position.type === 'BUY' ? 'arrowDown' : 'arrowUp',
-      text: `Close (${tradePnL >= 0 ? '+' : ''}${tradePnL.toFixed(1)})`,
+      text: isFullClose
+        ? `Close (${tradePnL >= 0 ? '+' : ''}${tradePnL.toFixed(1)})`
+        : `Partial ${closePercent}% (${tradePnL >= 0 ? '+' : ''}${tradePnL.toFixed(1)})`,
     };
 
     const nextMarkers = [...markers, exitMarker];
@@ -1642,6 +1672,22 @@ export default function BacktestPage() {
 
     // Auto-save
     autoSave(nextBalance, currentIndex, nextOpen, nextClosed, timeframe, nextMarkers);
+  };
+
+  // Update active position SL/TP
+  const handleUpdateSLTP = (positionId: string, sl: number | undefined, tp: number | undefined) => {
+    const nextOpen = openPositions.map(p => {
+      if (p.id === positionId) {
+        return {
+          ...p,
+          stopLoss: sl,
+          takeProfit: tp,
+        };
+      }
+      return p;
+    });
+    setOpenPositions(nextOpen);
+    autoSave(balance, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframe, markers);
   };
 
 
@@ -2525,14 +2571,77 @@ export default function BacktestPage() {
                   >
                     <div className={styles.posHeader}>
                       <span style={{ fontWeight: 700, fontSize: '0.8rem', color: pos.type === 'BUY' ? '#10b981' : '#ef4444' }}>
-                        {pos.type} {pos.lotSize} Lots
+                        {pos.type} {pos.lotSize.toFixed(2)} Lots
                       </span>
-                      <button
-                        className={styles.posCloseBtn}
-                        onClick={() => handleClosePosition(pos.id)}
-                      >
-                        CLOSE
-                      </button>
+                      
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          className={styles.posCloseBtn}
+                          onClick={() => {
+                            if (activeCloseMenuId === pos.id) {
+                              setActiveCloseMenuId(null);
+                            } else {
+                              setActiveCloseMenuId(pos.id);
+                              setPartialClosePercent(50);
+                            }
+                          }}
+                        >
+                          CLOSE
+                        </button>
+                        
+                        {activeCloseMenuId === pos.id && (
+                          <div className={styles.closeDropdown}>
+                            <button
+                              type="button"
+                              className={styles.closeDropdownItem}
+                              onClick={() => {
+                                handleClosePosition(pos.id, 100);
+                                setActiveCloseMenuId(null);
+                              }}
+                            >
+                              Full Close (100%)
+                            </button>
+                            
+                            <div className={styles.partialSection}>
+                              <div className={styles.sliderHeader}>
+                                <span>Partial: {partialClosePercent}%</span>
+                                <span>({(pos.lotSize * partialClosePercent / 100).toFixed(2)} L)</span>
+                              </div>
+                              <input
+                                type="range"
+                                min="10"
+                                max="90"
+                                step="10"
+                                value={partialClosePercent}
+                                onChange={e => setPartialClosePercent(parseInt(e.target.value))}
+                                className={styles.percentSlider}
+                              />
+                              <div className={styles.presetRow}>
+                                {[25, 50, 75].map(pct => (
+                                  <button
+                                    key={pct}
+                                    type="button"
+                                    className={styles.presetBtn}
+                                    onClick={() => setPartialClosePercent(pct)}
+                                  >
+                                    {pct}%
+                                  </button>
+                                ))}
+                              </div>
+                              <button
+                                type="button"
+                                className={styles.confirmCloseBtn}
+                                onClick={() => {
+                                  handleClosePosition(pos.id, partialClosePercent);
+                                  setActiveCloseMenuId(null);
+                                }}
+                              >
+                                Confirm Close
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className={styles.posDetails}>
@@ -2541,8 +2650,85 @@ export default function BacktestPage() {
                     </div>
 
                     <div className={styles.posDetails}>
-                      <span>SL: {pos.stopLoss ? formatPrice(pos.stopLoss, symbol) : '-'}</span>
-                      <span>TP: {pos.takeProfit ? formatPrice(pos.takeProfit, symbol) : '-'}</span>
+                      <span>
+                        SL:{' '}
+                        {editingSLId === pos.id ? (
+                          <input
+                            type="number"
+                            step="any"
+                            value={tempSL}
+                            onChange={e => setTempSL(e.target.value)}
+                            onBlur={() => {
+                              const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
+                              handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
+                              setEditingSLId(null);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
+                                handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
+                                setEditingSLId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingSLId(null);
+                              }
+                            }}
+                            className={styles.smallPriceInput}
+                            autoFocus
+                          />
+                        ) : (
+                          <span
+                            className={styles.editableField}
+                            onClick={() => {
+                              setEditingSLId(pos.id);
+                              setEditingTPId(null);
+                              setTempSL(pos.stopLoss ? pos.stopLoss.toString() : '');
+                            }}
+                            title="Click to edit SL"
+                          >
+                            {pos.stopLoss ? formatPrice(pos.stopLoss, symbol) : 'None'} ✎
+                          </span>
+                        )}
+                      </span>
+
+                      <span>
+                        TP:{' '}
+                        {editingTPId === pos.id ? (
+                          <input
+                            type="number"
+                            step="any"
+                            value={tempTP}
+                            onChange={e => setTempTP(e.target.value)}
+                            onBlur={() => {
+                              const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
+                              handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
+                              setEditingTPId(null);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
+                                handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
+                                setEditingTPId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingTPId(null);
+                              }
+                            }}
+                            className={styles.smallPriceInput}
+                            autoFocus
+                          />
+                        ) : (
+                          <span
+                            className={styles.editableField}
+                            onClick={() => {
+                              setEditingTPId(pos.id);
+                              setEditingSLId(null);
+                              setTempTP(pos.takeProfit ? pos.takeProfit.toString() : '');
+                            }}
+                            title="Click to edit TP"
+                          >
+                            {pos.takeProfit ? formatPrice(pos.takeProfit, symbol) : 'None'} ✎
+                          </span>
+                        )}
+                      </span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem' }}>
@@ -2861,22 +3047,159 @@ export default function BacktestPage() {
                         <td>{pos.lotSize.toFixed(2)}</td>
                         <td>{formatPrice(pos.entryPrice, pos.symbol)}</td>
                         <td>{formatPrice(pos.currentPrice, pos.symbol)}</td>
-                        <td>{pos.stopLoss ? formatPrice(pos.stopLoss, pos.symbol) : '-'}</td>
-                        <td>{pos.takeProfit ? formatPrice(pos.takeProfit, pos.symbol) : '-'}</td>
+                        
+                        <td>
+                          {editingSLId === pos.id ? (
+                            <input
+                              type="number"
+                              step="any"
+                              value={tempSL}
+                              onChange={e => setTempSL(e.target.value)}
+                              onBlur={() => {
+                                const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
+                                handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
+                                setEditingSLId(null);
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
+                                  handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
+                                  setEditingSLId(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingSLId(null);
+                                }
+                              }}
+                              className={styles.smallPriceInput}
+                              autoFocus
+                            />
+                          ) : (
+                            <span
+                              className={styles.editableField}
+                              onClick={() => {
+                                setEditingSLId(pos.id);
+                                setEditingTPId(null);
+                                setTempSL(pos.stopLoss ? pos.stopLoss.toString() : '');
+                              }}
+                              title="Click to edit SL"
+                            >
+                              {pos.stopLoss ? formatPrice(pos.stopLoss, pos.symbol) : 'None'} ✎
+                            </span>
+                          )}
+                        </td>
+                        
+                        <td>
+                          {editingTPId === pos.id ? (
+                            <input
+                              type="number"
+                              step="any"
+                              value={tempTP}
+                              onChange={e => setTempTP(e.target.value)}
+                              onBlur={() => {
+                                const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
+                                handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
+                                setEditingTPId(null);
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
+                                  handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
+                                  setEditingTPId(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingTPId(null);
+                                }
+                              }}
+                              className={styles.smallPriceInput}
+                              autoFocus
+                            />
+                          ) : (
+                            <span
+                              className={styles.editableField}
+                              onClick={() => {
+                                setEditingTPId(pos.id);
+                                setEditingSLId(null);
+                                setTempTP(pos.takeProfit ? pos.takeProfit.toString() : '');
+                              }}
+                              title="Click to edit TP"
+                            >
+                              {pos.takeProfit ? formatPrice(pos.takeProfit, pos.symbol) : 'None'} ✎
+                            </span>
+                          )}
+                        </td>
+
                         <td style={{ color: pos.unrealizedPnl >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
                           {formatCurrency(pos.unrealizedPnl)}
                         </td>
                         <td style={{ color: pos.unrealizedPips >= 0 ? '#10b981' : '#ef4444' }}>
                           {formatPips(pos.unrealizedPips)}
                         </td>
-                        <td>
+                        <td style={{ position: 'relative', overflow: 'visible' }}>
                           <button
                             className={styles.posCloseBtn}
-                            onClick={() => handleClosePosition(pos.id)}
+                            onClick={() => {
+                              if (activeCloseMenuId === pos.id) {
+                                setActiveCloseMenuId(null);
+                              } else {
+                                setActiveCloseMenuId(pos.id);
+                                setPartialClosePercent(50);
+                              }
+                            }}
                             style={{ margin: 0, padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
                           >
                             CLOSE
                           </button>
+                          
+                          {activeCloseMenuId === pos.id && (
+                            <div className={styles.closeDropdown} style={{ right: 0, top: '100%', left: 'auto' }}>
+                              <button
+                                type="button"
+                                className={styles.closeDropdownItem}
+                                onClick={() => {
+                                  handleClosePosition(pos.id, 100);
+                                  setActiveCloseMenuId(null);
+                                }}
+                              >
+                                Full Close (100%)
+                              </button>
+                              
+                              <div className={styles.partialSection}>
+                                <div className={styles.sliderHeader}>
+                                  <span>Partial: {partialClosePercent}%</span>
+                                  <span>({(pos.lotSize * partialClosePercent / 100).toFixed(2)} L)</span>
+                                </div>
+                                <input
+                                  type="range"
+                                  min="10"
+                                  max="90"
+                                  step="10"
+                                  value={partialClosePercent}
+                                  onChange={e => setPartialClosePercent(parseInt(e.target.value))}
+                                  className={styles.percentSlider}
+                                />
+                                <div className={styles.presetRow}>
+                                  {[25, 50, 75].map(pct => (
+                                    <button
+                                      key={pct}
+                                      type="button"
+                                      className={styles.presetBtn}
+                                      onClick={() => setPartialClosePercent(pct)}
+                                    >
+                                      {pct}%
+                                    </button>
+                                  ))}
+                                </div>
+                                <button
+                                  type="button"
+                                  className={styles.confirmCloseBtn}
+                                  onClick={() => {
+                                    handleClosePosition(pos.id, partialClosePercent);
+                                    setActiveCloseMenuId(null);
+                                  }}
+                                >
+                                  Confirm Close
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     ))}
