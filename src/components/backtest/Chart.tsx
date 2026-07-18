@@ -343,6 +343,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const markerPrimitiveRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const lastHoveredLogicalRef = useRef<number | null>(null);
   // Track candle data identity: first timestamp + last timestamp + count
   const dataSignatureRef = useRef<string>('');
   const activeToolRef = useRef<string | null>(activeTool);
@@ -752,7 +753,19 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       }
     },
     resetZoom: () => {
-      chartRef.current?.timeScale().fitContent();
+      const timeScale = chartRef.current?.timeScale();
+      if (timeScale) {
+        const targetIndex = (lastHoveredLogicalRef.current !== null)
+          ? lastHoveredLogicalRef.current
+          : (candles.length - 1);
+
+        const visibleBars = 120;
+        const half = Math.floor(visibleBars / 2);
+        timeScale.setVisibleLogicalRange({
+          from: targetIndex - half,
+          to: targetIndex + half,
+        });
+      }
     }
   }));
 
@@ -1235,6 +1248,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     // Crosshair Move Handling (includes OHLC and drawing preview)
     chart.subscribeCrosshairMove((param: MouseEventParams) => {
+      if (param.logical !== undefined && param.logical !== null) {
+        lastHoveredLogicalRef.current = param.logical as number;
+      }
       // Update preview drawing anchors if a preview is active
       const toolType = activeToolRef.current;
       if (toolType && previewDrawingRef.current && param.point && param.time !== undefined) {
