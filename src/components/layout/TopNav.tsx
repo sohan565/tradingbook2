@@ -64,7 +64,8 @@ export default function TopNav() {
   const toggleDrawer = useCallback(() => setDrawerOpen((v) => !v), []);
 
   const navItems = [
-    { label: 'Backtesting', path: '/backtest' },
+    { label: 'Backtest Replay', path: '/backtest' },
+    { label: 'Backtest Journal', path: '/backtest-journal' },
     { label: 'Trading Journal', path: '/journal' },
     { label: 'Accounts & Webhooks', path: '/accounts' },
     { label: 'Analytics', path: '/analytics' },

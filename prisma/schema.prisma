@@ -92,3 +92,54 @@ model BacktestSession {
   updatedAt      DateTime @updatedAt
 }
 
+model BacktestRecord {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  trades      BacktestEntry[]
+}
+
+model BacktestEntry {
+  id               String         @id @default(uuid())
+  backtestRecordId String
+  backtestRecord   BacktestRecord @relation(fields: [backtestRecordId], references: [id], onDelete: Cascade)
+  tradeNumber      Int
+  tradeName        String?
+  pair             String
+  direction        String // "LONG" or "SHORT"
+  timeframe        String?
+  entryPrice       Float?
+  stopLoss         Float?
+  takeProfit       Float?
+  riskReward       Float?
+  pips             Float?
+  pnl              Float? // P&L in R-value (R-multiple)
+  outcome          String // "WIN", "LOSS", "BREAKEVEN"
+  tradeDate        String? // YYYY-MM-DD
+  tradeTime        String? // HH:MM
+  session          String? // "Asian", "London", "New York"
+  levelsPlayed     String[]
+  confirmations    String[]
+  notes            String?
+  mistakes         String[]
+  lessons          String?
+  category         String? // "A+", "A", "B", "C", "D"
+  screenshot       String? // primary screenshot image path
+  charts           String[] // extra annotated chart screenshots
+  replayLink       String?
+  tvLink           String?
+  tags             String[]
+  confidence       Float? // Gemini extraction confidence score (0 to 1)
+  executionRating  Int?
+  disciplineRating Int?
+  patienceRating   Int?
+  psychologyRating Int?
+  emotionBefore    String?
+  emotionAfter     String?
+  aiReview         Json? // Stores compiled trade strengths, weaknesses, score
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
