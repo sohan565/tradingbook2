@@ -222,16 +222,6 @@ interface ChartProps {
   onSelectTool?: (tool: string | null) => void;
   timeframe?: string;
   isZoomLocked?: boolean;
-  onClosePosition?: (id: string, sizePercent: number) => void;
-  isPlaying?: boolean;
-  onTogglePlay?: () => void;
-  onStepForward?: () => void;
-  onStepBackward?: () => void;
-  onResetReplay?: () => void;
-  speed?: number;
-  onSpeedChange?: (ms: number) => void;
-  totalCandlesCount?: number;
-  currentIndex?: number;
 }
 
 export interface ChartRef {
@@ -336,16 +326,6 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   onSelectTool,
   timeframe,
   isZoomLocked = true,
-  onClosePosition,
-  isPlaying = false,
-  onTogglePlay,
-  onStepForward,
-  onStepBackward,
-  onResetReplay,
-  speed = 1000,
-  onSpeedChange,
-  totalCandlesCount = 0,
-  currentIndex = 0,
 }: ChartProps, ref) {
   const isShiftPressedRef = useRef(false);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
@@ -363,19 +343,6 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const markerPrimitiveRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showFullscreenReplay, setShowFullscreenReplay] = useState(true);
-  const [showFullscreenPositions, setShowFullscreenPositions] = useState(true);
-
-  useEffect(() => {
-    const onFSChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', onFSChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', onFSChange);
-    };
-  }, []);
   // Track candle data identity: first timestamp + last timestamp + count
   const dataSignatureRef = useRef<string>('');
   const activeToolRef = useRef<string | null>(activeTool);
@@ -773,9 +740,10 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       pendingAnchorsRef.current = [];
     },
     toggleFullscreen: () => {
-      if (wrapperRef.current) {
+      const page = document.querySelector('[class*="backtestContainer"]');
+      if (page) {
         if (!document.fullscreenElement) {
-          wrapperRef.current.requestFullscreen().catch(err => {
+          page.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable fullscreen: ${err.message}`);
           });
         } else {
@@ -3365,177 +3333,6 @@ ${notes || 'No notes added.'}`;
 
       {/* Position Tool Panel */}
       {isPositionTool && renderPositionToolPanel(selectedDrawing)}
-
-      {/* Fullscreen Overlay Controls */}
-      {isFullscreen && (
-        <>
-          {/* Top-Left Replay Panel Toggle Button */}
-          <button 
-            className={`${styles.fsToggleBtn} ${styles.fsReplayToggle}`}
-            onClick={() => setShowFullscreenReplay(!showFullscreenReplay)}
-          >
-            {showFullscreenReplay ? 'Hide Replay ▲' : 'Show Replay ▼'}
-          </button>
-
-          {/* Replay Panel Overlay */}
-          {showFullscreenReplay && (
-            <div className={styles.fsReplayPanel}>
-              <div className={styles.fsPanelTitle}>
-                <span>Replay Controls</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>🎬</span>
-              </div>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <button
-                  className={styles.actionBtn}
-                  onClick={onResetReplay}
-                  title="Reset (R)"
-                  style={{ flex: 1, padding: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-                >
-                  ⏮
-                </button>
-                <button
-                  className={styles.actionBtn}
-                  onClick={onStepBackward}
-                  title="Step Backward (ArrowLeft)"
-                  style={{ flex: 1, padding: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-                >
-                  ⏪
-                </button>
-                <button
-                  className={styles.actionBtn}
-                  onClick={onTogglePlay}
-                  style={{
-                    backgroundColor: isPlaying ? 'var(--term-accent, #7d79f2)' : 'rgba(255,255,255,0.04)',
-                    flex: 1.5,
-                    padding: '6px',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center'
-                  }}
-                  title="Play/Pause (Space)"
-                >
-                  {isPlaying ? '⏸' : '▶'}
-                </button>
-                <button
-                  className={styles.actionBtn}
-                  onClick={onStepForward}
-                  title="Step Forward (ArrowRight)"
-                  style={{ flex: 1, padding: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-                >
-                  ⏭
-                </button>
-              </div>
-
-              {/* Speed Controller */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Play Speed</span>
-                <div style={{ display: 'flex', gap: '3px' }}>
-                  {[
-                    { label: '1/s', ms: 1000 },
-                    { label: '2/s', ms: 500 },
-                    { label: '3/s', ms: 333 },
-                    { label: '4/s', ms: 250 },
-                    { label: '5/s', ms: 200 },
-                  ].map(sp => (
-                    <button
-                      key={sp.ms}
-                      onClick={() => onSpeedChange?.(sp.ms)}
-                      style={{
-                        flex: 1,
-                        padding: '4px 2px',
-                        fontSize: '0.68rem',
-                        background: speed === sp.ms ? 'var(--term-accent, #7d79f2)' : 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: '4px',
-                        color: '#ffffff',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                      }}
-                    >
-                      {sp.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Counter */}
-              <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center', marginTop: '4px' }}>
-                {(currentIndex ?? 0) + 1} / {totalCandlesCount ?? 0} candles
-              </div>
-            </div>
-          )}
-
-          {/* Bottom-Right Positions Toggle Button */}
-          <button 
-            className={`${styles.fsToggleBtn} ${styles.fsPositionsToggle}`}
-            onClick={() => setShowFullscreenPositions(!showFullscreenPositions)}
-          >
-            💼 Positions ({positions.length}) {showFullscreenPositions ? '▲' : '▼'}
-          </button>
-
-          {/* Positions Bar Overlay */}
-          {showFullscreenPositions && (
-            <div className={styles.fsPositionsPanel}>
-              <div className={styles.fsPanelTitle}>
-                <span>Active Positions ({positions.length})</span>
-                <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>💼</span>
-              </div>
-              <div style={{ flex: 1, overflowY: 'auto' }}>
-                {positions.length === 0 ? (
-                  <div style={{ color: '#64748b', fontSize: '0.8rem', padding: '1rem 0', textAlign: 'center' }}>
-                    No active open positions.
-                  </div>
-                ) : (
-                  <table className={styles.bottomTable} style={{ fontSize: '0.75rem', width: '100%' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                        <th style={{ textAlign: 'left', padding: '4px' }}>Symbol</th>
-                        <th style={{ textAlign: 'left', padding: '4px' }}>Type</th>
-                        <th style={{ textAlign: 'right', padding: '4px' }}>Lots</th>
-                        <th style={{ textAlign: 'right', padding: '4px' }}>Entry</th>
-                        <th style={{ textAlign: 'right', padding: '4px' }}>PnL (USD)</th>
-                        <th style={{ textAlign: 'center', padding: '4px' }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {positions.map(pos => (
-                        <tr key={pos.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                          <td style={{ padding: '6px 4px' }}>{pos.symbol}</td>
-                          <td style={{ padding: '6px 4px', color: pos.type === 'BUY' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
-                            {pos.type}
-                          </td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right' }}>{pos.lotSize.toFixed(2)}</td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right' }}>{pos.entryPrice.toFixed(2)}</td>
-                          <td style={{ padding: '6px 4px', textAlign: 'right', color: pos.unrealizedPnl >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
-                            ${pos.unrealizedPnl.toFixed(2)}
-                          </td>
-                          <td style={{ padding: '6px 4px', textAlign: 'center' }}>
-                            <button
-                              onClick={() => onClosePosition?.(pos.id, 100)}
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                border: '1px solid rgba(239, 68, 68, 0.3)',
-                                color: '#f87171',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                                fontSize: '0.68rem',
-                                cursor: 'pointer',
-                                fontWeight: 600
-                              }}
-                            >
-                              Close
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 });

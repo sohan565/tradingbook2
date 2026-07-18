@@ -1846,4 +1846,49 @@
   opacity: 0.9;
 }
 
+/* Collapsible Trade Panel (Sidebar) */
+.tradePanelCollapsed {
+  width: 0px !important;
+  min-width: 0px !important;
+  border-right: none !important;
+  overflow: hidden !important;
+}
+
+/* Fullscreen Toggle Buttons overlaying the chart area */
+.fsToggleBtn {
+  position: absolute;
+  z-index: 25000;
+  background: rgba(10, 14, 23, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a9a9b3;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+}
+
+.fsToggleBtn:hover {
+  background: rgba(10, 14, 23, 0.95);
+  border-color: var(--term-accent, #7d79f2);
+  color: #ffffff;
+  box-shadow: 0 4px 20px rgba(125, 121, 242, 0.2);
+}
+
+.fsReplayToggle {
+  top: 15px;
+  left: 15px;
+}
+
+.fsPositionsToggle {
+  bottom: 15px;
+  right: 15px;
+}
+
 

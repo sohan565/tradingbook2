@@ -291,6 +291,18 @@ export default function BacktestPage() {
   const [isMagnetMode, setIsMagnetMode] = useState<boolean>(false);
   const [isJumpToBarActive, setIsJumpToBarActive] = useState<boolean>(false);
   const [isBottomPanelCollapsed, setIsBottomPanelCollapsed] = useState<boolean>(false);
+  const [isTradePanelCollapsed, setIsTradePanelCollapsed] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  useEffect(() => {
+    const onFSChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFSChange);
+    };
+  }, []);
 
   // Drawing undo/redo stack states
   const [drawingsHistory, setDrawingsHistory] = useState<SerializedDrawing[][]>([]);
@@ -2328,7 +2340,7 @@ export default function BacktestPage() {
       {/* ── MAIN AREA ── */}
       <main className={styles.mainArea}>
         {/* ── LEFT PANEL ── */}
-        <aside className={`${styles.tradePanel} ${isOrderPanelOpen ? styles.orderPanelOpen : ''}`}>
+        <aside className={`${styles.tradePanel} ${isOrderPanelOpen ? styles.orderPanelOpen : ''} ${isTradePanelCollapsed ? styles.tradePanelCollapsed : ''}`}>
 
           {/* Replay Controls */}
           <div className={styles.panelSection}>
@@ -2889,17 +2901,26 @@ export default function BacktestPage() {
                   onSelectTool={setActiveTool}
                   timeframe={timeframe}
                   isZoomLocked={isZoomLocked}
-                  onClosePosition={handleClosePosition}
-                  isPlaying={isPlaying}
-                  onTogglePlay={handleTogglePlay}
-                  onStepForward={stepForward}
-                  onStepBackward={stepBackward}
-                  onResetReplay={handleReset}
-                  speed={speed}
-                  onSpeedChange={setSpeed}
-                  totalCandlesCount={allCandles.length}
-                  currentIndex={currentIndex}
                 />
+
+                {/* Fullscreen Original Panels Toggle Overlays */}
+                {isFullscreen && (
+                  <>
+                    <button
+                      className={`${styles.fsToggleBtn} ${styles.fsReplayToggle}`}
+                      onClick={() => setIsTradePanelCollapsed(!isTradePanelCollapsed)}
+                    >
+                      {isTradePanelCollapsed ? '▶ Show Replay' : '◀ Hide Replay'}
+                    </button>
+
+                    <button
+                      className={`${styles.fsToggleBtn} ${styles.fsPositionsToggle}`}
+                      onClick={() => setIsBottomPanelCollapsed(!isBottomPanelCollapsed)}
+                    >
+                      {isBottomPanelCollapsed ? '▲ Show Positions' : '▼ Hide Positions'}
+                    </button>
+                  </>
+                )}
 
                 {/* Display Timezone Selector Overlay */}
                 <div className={styles.timezoneSelectorContainer}>
