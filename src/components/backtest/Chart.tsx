@@ -765,6 +765,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
           from: targetIndex - half,
           to: targetIndex + half,
         });
+
+        // Reset the right price scale mode to force a recalculation of the visible price heights
+        chartRef.current?.priceScale('right').applyOptions({ autoScale: true });
       }
     }
   }));
