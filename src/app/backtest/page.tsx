@@ -2889,6 +2889,16 @@ export default function BacktestPage() {
                   onSelectTool={setActiveTool}
                   timeframe={timeframe}
                   isZoomLocked={isZoomLocked}
+                  onClosePosition={handleClosePosition}
+                  isPlaying={isPlaying}
+                  onTogglePlay={handleTogglePlay}
+                  onStepForward={stepForward}
+                  onStepBackward={stepBackward}
+                  onResetReplay={handleReset}
+                  speed={speed}
+                  onSpeedChange={setSpeed}
+                  totalCandlesCount={allCandles.length}
+                  currentIndex={currentIndex}
                 />
 
                 {/* Display Timezone Selector Overlay */}

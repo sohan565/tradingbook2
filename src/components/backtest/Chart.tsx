@@ -22,6 +22,7 @@ import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay } from '@/types
 import styles from './Chart.module.css';
 import { computeHeikinAshi } from '@/lib/heikin-ashi';
 import { TIMEFRAME_SECONDS } from '@/lib/aggregator';
+import { getSymbolConfig, formatPrice, formatCurrency, formatPips, formatPercent } from '@/lib/trade-math';
 
 // Import Drawing tools from lightweight-charts-drawing
 import {
@@ -221,6 +222,16 @@ interface ChartProps {
   onSelectTool?: (tool: string | null) => void;
   timeframe?: string;
   isZoomLocked?: boolean;
+  onClosePosition?: (id: string, sizePercent: number) => void;
+  isPlaying?: boolean;
+  onTogglePlay?: () => void;
+  onStepForward?: () => void;
+  onStepBackward?: () => void;
+  onResetReplay?: () => void;
+  speed?: number;
+  onSpeedChange?: (ms: number) => void;
+  totalCandlesCount?: number;
+  currentIndex?: number;
 }
 
 export interface ChartRef {
@@ -325,19 +336,46 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   onSelectTool,
   timeframe,
   isZoomLocked = true,
+  onClosePosition,
+  isPlaying = false,
+  onTogglePlay,
+  onStepForward,
+  onStepBackward,
+  onResetReplay,
+  speed = 1000,
+  onSpeedChange,
+  totalCandlesCount = 0,
+  currentIndex = 0,
 }: ChartProps, ref) {
   const isShiftPressedRef = useRef(false);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
   const [contextMenuState, setContextMenuState] = useState<{ x: number; y: number; drawingId: string } | null>(null);
   const [settingsModalId, setSettingsModalId] = useState<string | null>(null);
   const [toolbarPositionState, setToolbarPositionState] = useState<{ x: number; y: number }>({ x: 120, y: 15 });
-  const [_renderTrigger, setRenderTrigger] = useState(0);
+  const [renderTrigger, setRenderTrigger] = useState(0);
+  const guidelineLinesRef = useRef<{ r1?: any; r15?: any; r2?: any; r3?: any }>({});
+  const [isPanelMinimized, setIsPanelMinimized] = useState(false);
+  const [activePanelTab, setActivePanelTab] = useState<'stats' | 'targets' | 'journal' | 'appearance'>('stats');
   const copiedDrawingRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeSeriesRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const markerPrimitiveRef = useRef<any>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFullscreenReplay, setShowFullscreenReplay] = useState(true);
+  const [showFullscreenPositions, setShowFullscreenPositions] = useState(true);
+
+  useEffect(() => {
+    const onFSChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', onFSChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFSChange);
+    };
+  }, []);
   // Track candle data identity: first timestamp + last timestamp + count
   const dataSignatureRef = useRef<string>('');
   const activeToolRef = useRef<string | null>(activeTool);
@@ -357,6 +395,349 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const isJumpToBarActiveRef = useRef<boolean>(isJumpToBarActive);
   const onJumpToBarRef = useRef<((timestamp: number) => void) | undefined>(onJumpToBar);
   const onSelectToolRef = useRef<((tool: string | null) => void) | undefined>(onSelectTool);
+
+  // Helper to perform snapping of anchors to closest candle OHLC / rounding
+  const performSnapping = (drawing: any, candlesData: CandleData[]) => {
+    const snapMode = drawing.options?.snapMode; // 'high-low' | 'ohlc' | 'round' | null
+    if (!snapMode || candlesData.length === 0) return;
+
+    const config = getSymbolConfig(_symbol);
+    let updated = false;
+    const newAnchors = drawing.anchors.map((anchor: any) => {
+      // Find closest candle by time
+      let closestCandle = candlesData[0];
+      let minDiff = Math.abs((candlesData[0].time as number) - (anchor.time as number));
+      for (const c of candlesData) {
+        const diff = Math.abs((c.time as number) - (anchor.time as number));
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestCandle = c;
+        }
+      }
+
+      let snappedPrice = anchor.price;
+      if (snapMode === 'ohlc') {
+        const options = [closestCandle.open, closestCandle.high, closestCandle.low, closestCandle.close];
+        let bestPrice = options[0];
+        let bestDiff = Math.abs(anchor.price - bestPrice);
+        for (const opt of options) {
+          const d = Math.abs(anchor.price - opt);
+          if (d < bestDiff) {
+            bestDiff = d;
+            bestPrice = opt;
+          }
+        }
+        snappedPrice = bestPrice;
+      } else if (snapMode === 'high-low') {
+        const options = [closestCandle.high, closestCandle.low];
+        snappedPrice = Math.abs(anchor.price - options[0]) < Math.abs(anchor.price - options[1]) ? options[0] : options[1];
+      } else if (snapMode === 'round') {
+        const factor = Math.pow(10, Math.max(0, config.digits - 1));
+        snappedPrice = Math.round(anchor.price * factor) / factor;
+      }
+
+      if (Math.abs(snappedPrice - anchor.price) > 0.00001) {
+        updated = true;
+        return { ...anchor, price: snappedPrice };
+      }
+      return anchor;
+    });
+
+    if (updated) {
+      drawing.setAnchors(newAnchors);
+      drawing.requestUpdate();
+    }
+  };
+
+  // Helper to draw guide lines for 1R, 1.5R, 2R, 3R target levels on chart
+  const updateGuidelines = (drawing: any, series: any) => {
+    const gl = guidelineLinesRef.current;
+    
+    // Clean up old guide lines
+    if (gl.r1) { try { series.removePriceLine(gl.r1); } catch (e) {} delete gl.r1; }
+    if (gl.r15) { try { series.removePriceLine(gl.r15); } catch (e) {} delete gl.r15; }
+    if (gl.r2) { try { series.removePriceLine(gl.r2); } catch (e) {} delete gl.r2; }
+    if (gl.r3) { try { series.removePriceLine(gl.r3); } catch (e) {} delete gl.r3; }
+
+    if (!drawing || !series) return;
+    if (drawing.type !== 'long-position' && drawing.type !== 'short-position') return;
+    if (!drawing.options?.showGuidelines) return;
+
+    const anchors = drawing.anchors;
+    if (!anchors || anchors.length < 2) return;
+
+    const entry = anchors[0].price;
+    const stopLoss = anchors[1].price;
+    const diff = entry - stopLoss;
+
+    try {
+      gl.r1 = series.createPriceLine({
+        price: entry + 1 * diff,
+        color: 'rgba(0, 229, 255, 0.45)',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: '1.0 R',
+      });
+      gl.r15 = series.createPriceLine({
+        price: entry + 1.5 * diff,
+        color: 'rgba(0, 229, 255, 0.45)',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: '1.5 R',
+      });
+      gl.r2 = series.createPriceLine({
+        price: entry + 2 * diff,
+        color: 'rgba(0, 229, 255, 0.45)',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: '2.0 R',
+      });
+      gl.r3 = series.createPriceLine({
+        price: entry + 3 * diff,
+        color: 'rgba(0, 229, 255, 0.45)',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: '3.0 R',
+      });
+    } catch (err) {
+      console.error('Failed to create guidelines:', err);
+    }
+  };
+
+  useEffect(() => {
+    // Run prototype overrides once to lock Long / Short Position tool width to price/time coordinates
+    try {
+      const registry = getToolRegistry();
+      const longDef = registry.get('long-position');
+      const shortDef = registry.get('short-position');
+      console.log('[PrototypeOverrides] longDef:', longDef, 'shortDef:', shortDef);
+
+      const overridePrototypes = (definition: any) => {
+        if (!definition || !definition.factory) {
+          console.warn('[PrototypeOverrides] Definition or factory missing for:', definition);
+          return;
+        }
+        // Instantiate a dummy to get prototype references with safe arguments
+        const dummy = definition.factory('dummy_id', [], {}, {});
+        const DrawingProto = Object.getPrototypeOf(dummy);
+        console.log('[PrototypeOverrides] Patching DrawingProto:', DrawingProto);
+        
+        // 1. Override computeGeometry
+        DrawingProto.computeGeometry = function(t: any) {
+          if (!this.isValid()) return [];
+          const s = this.anchorToPixel(this._anchors[0], t);
+          const e = this.anchorToPixel(this._anchors[1], t);
+          const n = this.anchorToPixel(this._anchors[2], t);
+          if (!s || !e || !n) return [];
+          
+          // Dynamic width calculation based on entry and target time difference
+          let r = Math.abs(n.x - s.x);
+          if (r < 5) {
+            const barSpacing = t.timeScale.logicalToCoordinate ? (t.timeScale.logicalToCoordinate(1) - t.timeScale.logicalToCoordinate(0)) : 10;
+            r = Math.max(50, barSpacing * 15);
+          }
+          
+          const o = [];
+          const a = Math.min(s.y, e.y);
+          const c = Math.abs(e.y - s.y);
+          o.push({
+            type: "rectangle",
+            topLeft: { x: s.x, y: a },
+            width: r,
+            height: c
+          });
+          const l = Math.min(s.y, n.y);
+          const h = Math.abs(n.y - s.y);
+          o.push({
+            type: "rectangle",
+            topLeft: { x: s.x, y: l },
+            width: r,
+            height: h
+          });
+          return o;
+        };
+
+        // 2. Override testHit
+        DrawingProto.testHit = function(t: any, s: any) {
+          if (!this.isValid()) return false;
+          const e = this.anchorToPixel(this._anchors[0], s);
+          const n = this.anchorToPixel(this._anchors[1], s);
+          const o = this.anchorToPixel(this._anchors[2], s);
+          if (!e || !n || !o) return false;
+          
+          let r = Math.abs(o.x - e.x);
+          if (r < 5) {
+            const barSpacing = s.timeScale.logicalToCoordinate ? (s.timeScale.logicalToCoordinate(1) - s.timeScale.logicalToCoordinate(0)) : 10;
+            r = Math.max(50, barSpacing * 15);
+          }
+          
+          const a = e.x;
+          const c = e.x + r;
+          const l = Math.min(n.y, o.y);
+          const h = Math.max(n.y, o.y);
+          return t.x >= a && t.x <= c && t.y >= l && t.y <= h;
+        };
+
+        // 3. Override paneViews and the renderer's drawImpl
+        const paneViews = dummy.paneViews();
+        if (paneViews && paneViews[0]) {
+          const view = paneViews[0];
+          const renderer = view.renderer();
+          const RendererProto = Object.getPrototypeOf(renderer);
+          console.log('[PrototypeOverrides] Patching RendererProto:', RendererProto);
+
+          RendererProto.drawImpl = function(i: any) {
+            const { context: t, horizontalPixelRatio: s } = i;
+            const e = s;
+            const n = this._drawing.getViewport();
+            if (!n || !this._drawing.options.visible || !this._drawing.isValid()) return;
+            const o = this._drawing.anchors;
+            const r = this._drawing.anchorToPixel(o[0], n);
+            const a = this._drawing.anchorToPixel(o[1], n);
+            const c = this._drawing.anchorToPixel(o[2], n);
+            if (!r || !a || !c) return;
+
+            // Calculate dynamic width d
+            let d = Math.abs(c.x - r.x);
+            if (d < 5) {
+              const barSpacing = n.timeScale.logicalToCoordinate ? (n.timeScale.logicalToCoordinate(1) - n.timeScale.logicalToCoordinate(0)) : 10;
+              d = Math.max(50, barSpacing * 15);
+            }
+
+            const l = this._drawing.positionOptions;
+            const h = this._drawing.getPositionInfo();
+            
+            // Draw stop loss area (red box)
+            const isLong = this._drawing.type === 'long-position';
+            t.fillStyle = isLong ? "rgba(239, 83, 80, 0.25)" : "rgba(38, 166, 154, 0.25)";
+            const f = Math.min(r.y, a.y);
+            const g = Math.abs(a.y - r.y);
+            t.fillRect(r.x * e, f * e, d * e, g * e);
+            t.strokeStyle = isLong ? "#ef5350" : "#26a69a";
+            t.lineWidth = 1 * e;
+            t.strokeRect(r.x * e, f * e, d * e, g * e);
+            
+            // Draw take profit area (green box)
+            t.fillStyle = isLong ? "rgba(38, 166, 154, 0.25)" : "rgba(239, 83, 80, 0.25)";
+            const _ = Math.min(r.y, c.y);
+            const y = Math.abs(c.y - r.y);
+            t.fillRect(r.x * e, _ * e, d * e, y * e);
+            t.strokeStyle = isLong ? "#26a69a" : "#ef5350";
+            t.lineWidth = 1 * e;
+            t.strokeRect(r.x * e, _ * e, d * e, y * e);
+
+            // Draw line helpers
+            const drawLine = (ctx: any, p1: any, p2: any, ratio: number) => {
+              ctx.beginPath();
+              ctx.moveTo(p1.x * ratio, p1.y * ratio);
+              ctx.lineTo(p2.x * ratio, p2.y * ratio);
+              ctx.stroke();
+            };
+
+            // Entry line (solid blue)
+            t.strokeStyle = "#2196F3";
+            t.lineWidth = 2 * e;
+            drawLine(t, { x: r.x, y: r.y }, { x: r.x + d, y: r.y }, e);
+
+            // Stop loss boundary (dashed red/green)
+            t.strokeStyle = isLong ? "#ef5350" : "#26a69a";
+            t.lineWidth = 2 * e;
+            t.setLineDash([5 * e, 3 * e]);
+            drawLine(t, { x: r.x, y: a.y }, { x: r.x + d, y: a.y }, e);
+
+            // Take profit boundary (dashed green/red)
+            t.strokeStyle = isLong ? "#26a69a" : "#ef5350";
+            drawLine(t, { x: r.x, y: c.y }, { x: r.x + d, y: c.y }, e);
+            t.setLineDash([]);
+
+            // Draw Labels
+            const x = 11;
+            t.font = `${x * e}px sans-serif`;
+            t.textAlign = "left";
+            t.textBaseline = "middle";
+            const w = r.x + d + 5;
+            
+            // Entry Label
+            t.fillStyle = "#2196F3";
+            let P = "Entry";
+            if (l.showPrices) P += `: $${h.entry.toFixed(2)}`;
+            t.fillText(P, w * e, r.y * e);
+
+            // Stop Loss Label
+            t.fillStyle = isLong ? "#ef5350" : "#26a69a";
+            let O = "Stop";
+            if (l.showPrices) O += `: $${h.stopLoss.toFixed(2)}`;
+            if (l.showPercentage) O += ` (-${h.riskPercent.toFixed(2)}%)`;
+            t.fillText(O, w * e, a.y * e);
+
+            // Target Label
+            t.fillStyle = isLong ? "#26a69a" : "#ef5350";
+            let m = "Target";
+            if (l.showPrices) m += `: $${h.takeProfit.toFixed(2)}`;
+            if (l.showPercentage) m += ` (+${h.rewardPercent.toFixed(2)}%)`;
+            t.fillText(m, w * e, c.y * e);
+
+            // R:R text overlay
+            if (l.showRiskReward) {
+              t.fillStyle = "#ffffff";
+              const R = `R:R = 1:${h.riskRewardRatio.toFixed(2)}`;
+              const S = (r.y + c.y) / 2;
+              t.fillText(R, (r.x + 10) * e, S * e);
+            }
+
+            // Draw Title (LONG/SHORT)
+            t.fillStyle = isLong ? "#26a69a" : "#ef5350";
+            t.font = `bold ${14 * e}px sans-serif`;
+            t.fillText(isLong ? "LONG" : "SHORT", (r.x + 10) * e, (r.y - 15) * e);
+
+            // Draw control anchor dots if selected/editing
+            const T = this._drawing.state;
+            if (T === "selected" || T === "editing") {
+              const controlPoints = this._drawing.getControlPoints(n);
+              const drawAnchor = (ctx: any, pt: any, isSelected: boolean, ratio: number, color: string) => {
+                const nx = pt.x * ratio;
+                const ny = pt.y * ratio;
+                const rad = 4 * ratio;
+                const strokeW = 1.5 * ratio;
+                ctx.beginPath();
+                ctx.arc(nx, ny, rad, 0, Math.PI * 2);
+                ctx.fillStyle = "#131722";
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(nx, ny, rad - strokeW / 2, 0, Math.PI * 2);
+                ctx.strokeStyle = isSelected ? "#ffffff" : color;
+                ctx.lineWidth = strokeW;
+                ctx.stroke();
+              };
+              
+              controlPoints.forEach((cp: any) => {
+                drawAnchor(t, cp, cp.index === this._drawing._editingAnchorIndex, e, isLong ? "#26a69a" : "#ef5350");
+              });
+
+              // Draw horizontal width adjusting handle at the center-right edge of the entry line
+              t.beginPath();
+              t.arc((r.x + d) * e, r.y * e, 5.5 * e, 0, Math.PI * 2);
+              t.fillStyle = "#ffffff";
+              t.fill();
+              t.strokeStyle = "#2196F3";
+              t.lineWidth = 2 * e;
+              t.stroke();
+            }
+          };
+        }
+      };
+
+      overridePrototypes(longDef);
+      overridePrototypes(shortDef);
+      console.log('[PrototypeOverrides] Successfully patched LongPosition & ShortPosition classes.');
+    } catch (err) {
+      console.error('[PrototypeOverrides] Failed to override drawing prototypes:', err);
+    }
+  }, []);
 
   useEffect(() => {
     isMagnetModeRef.current = isMagnetMode;
@@ -392,9 +773,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       pendingAnchorsRef.current = [];
     },
     toggleFullscreen: () => {
-      if (containerRef.current) {
+      if (wrapperRef.current) {
         if (!document.fullscreenElement) {
-          containerRef.current.requestFullscreen().catch(err => {
+          wrapperRef.current.requestFullscreen().catch(err => {
             console.error(`Error attempting to enable fullscreen: ${err.message}`);
           });
         } else {
@@ -809,6 +1190,13 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     // Subscribe to chart clicks via chart's mouse event API
     chart.subscribeClick(handleDrawingClick);
 
+    const handleVisibleRangeChange = () => {
+      drawingManager.getAllDrawings().forEach(drawing => {
+        drawing.requestUpdate();
+      });
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
+
     // Subscribe to drawing events
     const handleDrawingEvent = () => {
       if (onDrawingChange) {
@@ -819,30 +1207,42 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     };
 
     const unsubs: (() => void)[] = [
-      drawingManager.on('drawing:added', handleDrawingEvent),
-      drawingManager.on('drawing:updated', () => {
+      drawingManager.on('drawing:added', () => {
         handleDrawingEvent();
-        // Keep selected drawing in sync if it is updated (e.g. by dragging anchors)
+        setRenderTrigger(prev => prev + 1);
+      }),
+      drawingManager.on('drawing:updated', () => {
         const selected = drawingManager.getSelectedDrawing();
         if (selected) {
+          performSnapping(selected, candles);
           setSelectedDrawingId(selected.id);
+          updateGuidelines(selected, candleSeries);
         }
+        handleDrawingEvent();
+        setRenderTrigger(prev => prev + 1);
       }),
       drawingManager.on('drawing:removed', () => {
         handleDrawingEvent();
         const selected = drawingManager.getSelectedDrawing();
         if (!selected) {
           setSelectedDrawingId(null);
+          updateGuidelines(null, candleSeries);
         }
+        setRenderTrigger(prev => prev + 1);
       }),
       drawingManager.on('drawing:cleared', () => {
         handleDrawingEvent();
         setSelectedDrawingId(null);
+        updateGuidelines(null, candleSeries);
+        setRenderTrigger(prev => prev + 1);
       }),
       drawingManager.on('drawing:selected', () => {
         const selected = drawingManager.getSelectedDrawing();
         if (selected) {
+          console.log('[DrawingManager] selected:', selected.type, selected.id);
           setSelectedDrawingId(selected.id);
+          updateGuidelines(selected, candleSeries);
+          setRenderTrigger(prev => prev + 1);
           if (selected.anchors && selected.anchors.length > 0 && containerRef.current) {
             const tScale = chart.timeScale();
             const firstAnchor = selected.anchors[0];
@@ -860,6 +1260,8 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       drawingManager.on('drawing:deselected', () => {
         setSelectedDrawingId(null);
         setContextMenuState(null);
+        updateGuidelines(null, candleSeries);
+        setRenderTrigger(prev => prev + 1);
       }),
     ].filter((unsub): unsub is () => void => unsub !== undefined);
 
@@ -1029,6 +1431,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     let dragAnchorIndex: number | null = null;
     let dragAnchorDrawing: any = null;
     let originalAnchors: Anchor[] = [];
+    let isDraggingWidth = false;
+    let dragWidthDrawing: any = null;
+    let startWidthAnchors: Anchor[] = [];
 
     const timeScale = chart.timeScale();
 
@@ -1115,6 +1520,38 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
           return; // Let library handle anchor dragging
         }
+
+        // Check if we hit the dedicated horizontal width handle of the selected drawing (for long/short position)
+        if (selected.type === 'long-position' || selected.type === 'short-position') {
+          const viewport = selected.getViewport();
+          if (viewport) {
+            const entryPx = (selected as any).anchorToPixel(selected.anchors[0], viewport);
+            const tpPx = (selected as any).anchorToPixel(selected.anchors[2], viewport);
+            if (entryPx && tpPx) {
+              let width = Math.abs(tpPx.x - entryPx.x);
+              if (width < 5) {
+                const barSpacing = (viewport as any).timeScale.logicalToCoordinate ? ((viewport as any).timeScale.logicalToCoordinate(1 as any) - (viewport as any).timeScale.logicalToCoordinate(0 as any)) : 10;
+                width = Math.max(50, barSpacing * 15);
+              }
+              const handleX = entryPx.x + width;
+              const handleY = entryPx.y;
+              
+              const dx = pt.x - handleX;
+              const dy = pt.y - handleY;
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist <= 8) {
+                isDraggingWidth = true;
+                dragWidthDrawing = selected;
+                startWidthAnchors = selected.anchors.map((a: any) => ({ ...a }));
+                
+                chart.applyOptions({
+                  handleScroll: false
+                });
+                return;
+              }
+            }
+          }
+        }
       }
 
       // Check if we hit the body of any drawing
@@ -1169,6 +1606,41 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     };
 
     const handleBodyPointerMove = (e: PointerEvent) => {
+      // 0. Width handle dragging logic (Horizontal width adjust only)
+      if (isDraggingWidth && dragWidthDrawing) {
+        const rect = containerRef.current!.getBoundingClientRect();
+        const pt = {
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top
+        };
+        const currentLogical = timeScale.coordinateToLogical(pt.x);
+        if (currentLogical !== null) {
+          const entryLogical = timeToLogical(startWidthAnchors[0].time as number);
+          if (entryLogical !== null) {
+            // Force horizontal direction - anchors[2].time updates, price stays TP price
+            const targetLogical = Math.max(entryLogical + 1, currentLogical);
+            const timeVal = logicalToTime(targetLogical);
+            if (timeVal !== null) {
+              const anchors = [...dragWidthDrawing.anchors];
+              anchors[2] = {
+                ...anchors[2],
+                time: timeVal as any
+              };
+              dragWidthDrawing.setAnchors(anchors);
+              dragWidthDrawing.requestUpdate();
+              
+              // update guidelines
+              updateGuidelines(dragWidthDrawing, candleSeriesRef.current);
+              
+              setRenderTrigger(prev => prev + 1);
+            }
+          }
+        }
+        e.stopPropagation();
+        e.preventDefault();
+        return;
+      }
+
       // 1. Shift key anchor dragging constraint (horizontal-only / vertical-only)
       if (isDraggingAnchor && dragAnchorDrawing && dragAnchorIndex !== null) {
         if (isShiftPressedRef.current && originalAnchors[dragAnchorIndex]) {
@@ -1318,6 +1790,29 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         e.stopPropagation();
         e.preventDefault();
       }
+
+      if (isDraggingWidth) {
+        isDraggingWidth = false;
+
+        // Re-enable chart scrolling
+        chart.applyOptions({
+          handleScroll: activeToolRef.current
+            ? false
+            : {
+                mouseWheel: true,
+                pressedMouseMove: true,
+                horzTouchDrag: true,
+                vertTouchDrag: true,
+              }
+        });
+
+        if (dragWidthDrawing && onDrawingChange) {
+          const all = drawingManager.exportDrawings().filter((d: any) => d.id !== 'preview');
+          onDrawingChange(all);
+        }
+        dragWidthDrawing = null;
+        startWidthAnchors = [];
+      }
     };
 
     const handlePointerMoveHover = (e: PointerEvent) => {
@@ -1372,6 +1867,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     resizeObserver.observe(container);
 
     return () => {
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleVisibleRangeChange);
       if (container) {
         container.removeEventListener('pointerdown', handleBodyPointerDown, true);
         container.removeEventListener('pointermove', handlePointerMoveHover, true);
@@ -2054,8 +2550,775 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     }
   }, [positions]);
 
+  const selectedDrawing = selectedDrawingId ? drawingManagerRef.current?.getDrawing(selectedDrawingId) : null;
+  const isPositionTool = selectedDrawing && (selectedDrawing.type === 'long-position' || selectedDrawing.type === 'short-position');
+
+  const renderPositionToolPanel = (drawing: any) => {
+    if (!drawing) return null;
+    const isLong = drawing.type === 'long-position';
+
+    // Retrieve anchors
+    const entry = drawing.anchors[0]?.price || 0;
+    const stopLoss = drawing.anchors[1]?.price || 0;
+    const takeProfit = drawing.anchors[2]?.price || 0;
+
+    // Symbol configuration
+    const config = getSymbolConfig(_symbol);
+    const riskPriceDiff = Math.abs(entry - stopLoss);
+    const rewardPriceDiff = Math.abs(takeProfit - entry);
+    const riskPips = riskPriceDiff / config.pipSize;
+    const rewardPips = rewardPriceDiff / config.pipSize;
+    const rr = riskPips > 0 ? (rewardPips / riskPips) : 0;
+
+    // Load options
+    const opt = drawing.options || {};
+    const balance = opt.balance !== undefined ? opt.balance : 10000;
+    const riskPercent = opt.riskPercent !== undefined ? opt.riskPercent : 1.0;
+    const riskAmount = opt.riskAmount !== undefined ? opt.riskAmount : 100;
+    const useFixedAmount = !!opt.useFixedAmount;
+    const leverage = opt.leverage || '1:100';
+    const commission = opt.commission !== undefined ? opt.commission : 7.0;
+    const spread = opt.spread !== undefined ? opt.spread : 2.0;
+    const snapMode = opt.snapMode || 'none';
+    const showGuidelines = !!opt.showGuidelines;
+    const notes = opt.notes || '';
+    const checklist = opt.checklist || {};
+    const psychology = opt.psychology || {
+      emotion: 'Calm',
+      confidence: 5,
+      ruleFollowed: true,
+      fomo: false,
+      revengeTrade: false,
+      patience: 5,
+      discipline: 5,
+      mistakes: [],
+      lessons: '',
+    };
+    const partials = opt.partials || [
+      { price: entry + (isLong ? rewardPriceDiff * 0.25 : -rewardPriceDiff * 0.25), percent: 25, active: false },
+      { price: entry + (isLong ? rewardPriceDiff * 0.50 : -rewardPriceDiff * 0.50), percent: 50, active: false },
+      { price: entry + (isLong ? rewardPriceDiff * 0.75 : -rewardPriceDiff * 0.75), percent: 25, active: false },
+      { price: entry + (isLong ? rewardPriceDiff * 1.00 : -rewardPriceDiff * 1.00), percent: 100, active: false }
+    ];
+    const sessionName = opt.sessionName || 'London Session';
+
+    // Lot Size calculation: standard MT4/MT5 forex/gold risk size
+    const riskPipsWithSpread = riskPips + spread;
+    const dollarRisk = useFixedAmount ? riskAmount : balance * (riskPercent / 100);
+    const lotSize = riskPipsWithSpread > 0 ? (dollarRisk / (riskPipsWithSpread * config.pipValue)) : 0;
+    const dollarReward = lotSize * rewardPips * config.pipValue;
+
+    // Expected profit/loss after commission/spread costs
+    const expectedProfit = dollarReward - (lotSize * commission);
+    const expectedLoss = dollarRisk + (lotSize * commission);
+
+    // Required win rate for breakeven
+    const winRateRequired = rr > 0 ? (1 / (1 + rr)) * 100 : 50;
+
+    // Scan candles since entry to calculate MAE, MFE and trade status
+    const entryTime = drawing.anchors[0]?.time || 0;
+    const tradeCandles = candles.filter(c => c.time >= entryTime);
+
+    let status = 'Waiting';
+    let exitIndex = -1;
+    let exitPrice = 0;
+
+    if (tradeCandles.length > 0) {
+      status = 'Active';
+      for (let i = 0; i < tradeCandles.length; i++) {
+        const c = tradeCandles[i];
+        if (isLong) {
+          if (c.low <= stopLoss) {
+            status = 'Stopped Out';
+            exitIndex = i;
+            exitPrice = stopLoss;
+            break;
+          } else if (c.high >= takeProfit) {
+            status = 'Target Hit';
+            exitIndex = i;
+            exitPrice = takeProfit;
+            break;
+          }
+        } else {
+          if (c.high >= stopLoss) {
+            status = 'Stopped Out';
+            exitIndex = i;
+            exitPrice = stopLoss;
+            break;
+          } else if (c.low <= takeProfit) {
+            status = 'Target Hit';
+            exitIndex = i;
+            exitPrice = takeProfit;
+            break;
+          }
+        }
+      }
+    }
+
+    // MAE/MFE Calculations
+    let mfePips = 0;
+    let maePips = 0;
+    if (tradeCandles.length > 0) {
+      const activePeriodCandles = exitIndex !== -1 ? tradeCandles.slice(0, exitIndex + 1) : tradeCandles;
+      if (isLong) {
+        const maxHigh = Math.max(...activePeriodCandles.map(c => c.high));
+        const minLow = Math.min(...activePeriodCandles.map(c => c.low));
+        mfePips = Math.max(0, maxHigh - entry) / config.pipSize;
+        maePips = Math.max(0, entry - minLow) / config.pipSize;
+      } else {
+        const minLow = Math.min(...activePeriodCandles.map(c => c.low));
+        const maxHigh = Math.max(...activePeriodCandles.map(c => c.high));
+        mfePips = Math.max(0, entry - minLow) / config.pipSize;
+        maePips = Math.max(0, maxHigh - entry) / config.pipSize;
+      }
+    }
+
+    const durationBars = status === 'Waiting' ? 0 : (exitIndex !== -1 ? exitIndex + 1 : tradeCandles.length);
+
+    // Update helpers
+    const handleUpdatePanelOption = (key: string, val: any) => {
+      const updatedOptions = {
+        ...drawing.options,
+        [key]: val
+      };
+      
+      if (key === 'showGuidelines') {
+        drawing.options.showGuidelines = val;
+        updateGuidelines(drawing, candleSeriesRef.current);
+      }
+      if (key === 'snapMode') {
+        drawing.options.snapMode = val;
+        performSnapping(drawing, candles);
+      }
+
+      handleUpdateOptions(updatedOptions);
+    };
+
+    const handleUpdatePsychology = (key: string, val: any) => {
+      const nextPsych = {
+        ...psychology,
+        [key]: val
+      };
+      handleUpdatePanelOption('psychology', nextPsych);
+    };
+
+    // Keyboard entry level edits
+    const handleUpdateAnchorPrice = (index: number, newPrice: number) => {
+      if (isNaN(newPrice)) return;
+      const anchors = [...drawing.anchors];
+      anchors[index] = { ...anchors[index], price: parseFloat(newPrice.toFixed(config.digits)) };
+      drawing.setAnchors(anchors);
+      drawing.requestUpdate();
+      
+      // Keep guidelines aligned
+      updateGuidelines(drawing, candleSeriesRef.current);
+      
+      if (onDrawingChange && drawingManagerRef.current) {
+        onDrawingChange(drawingManagerRef.current.exportDrawings().filter(d => d.id !== 'preview'));
+      }
+      setRenderTrigger(prev => prev + 1);
+    };
+
+    const handleToggleChecklist = (item: string) => {
+      const nextCheck = {
+        ...checklist,
+        [item]: !checklist[item]
+      };
+      handleUpdatePanelOption('checklist', nextCheck);
+    };
+
+    const handleTogglePartial = (index: number) => {
+      const nextPartials = [...partials];
+      nextPartials[index] = { ...nextPartials[index], active: !nextPartials[index].active };
+      handleUpdatePanelOption('partials', nextPartials);
+    };
+
+    const handleUpdatePartialPrice = (index: number, priceVal: number) => {
+      const nextPartials = [...partials];
+      nextPartials[index] = { ...nextPartials[index], price: priceVal };
+      handleUpdatePanelOption('partials', nextPartials);
+    };
+
+    const handleUpdatePartialPercent = (index: number, pct: number) => {
+      const nextPartials = [...partials];
+      nextPartials[index] = { ...nextPartials[index], percent: pct };
+      handleUpdatePanelOption('partials', nextPartials);
+    };
+
+    // Copy to clipboard formatting
+    const copyJournalTemplate = () => {
+      const listItems = Object.entries(checklist)
+        .filter(([_, active]) => active)
+        .map(([key]) => `  - [x] ${key}`)
+        .join('\n');
+      
+      const mistakesList = (psychology.mistakes || []).map((m: string) => `  - ${m}`).join('\n');
+
+      const template = `### Trade Journal - ${_symbol} (${isLong ? 'LONG' : 'SHORT'})
+- **Session:** ${sessionName}
+- **Entry Price:** ${entry.toFixed(config.digits)}
+- **Stop Loss:** ${stopLoss.toFixed(config.digits)} (${riskPips.toFixed(1)} pips)
+- **Take Profit:** ${takeProfit.toFixed(config.digits)} (${rewardPips.toFixed(1)} pips)
+- **Risk:Reward:** ${rr.toFixed(2)} R
+- **Lot Size:** ${lotSize.toFixed(2)} lots
+- **Trade Status:** ${status}
+- **Trade Duration:** ${durationBars} bars
+
+#### 🧠 Psychology Log
+- **Emotion:** ${psychology.emotion}
+- **Confidence:** ${'★'.repeat(psychology.confidence)}${'☆'.repeat(5 - psychology.confidence)}
+- **Rule Followed:** ${psychology.ruleFollowed ? 'Yes' : 'No'}
+- **FOMO:** ${psychology.fomo ? 'Yes' : 'No'}
+- **Revenge Trade:** ${psychology.revengeTrade ? 'Yes' : 'No'}
+- **Patience Rating:** ${psychology.patience}/10
+- **Discipline Rating:** ${psychology.discipline}/10
+${mistakesList ? `\n- **Mistakes Made:**\n${mistakesList}` : ''}
+${psychology.lessons ? `\n- **Lessons Learned:**\n${psychology.lessons}` : ''}
+
+#### 🎯 Confirmation Checklist
+${listItems || '  - None selected'}
+
+#### 📝 Notes
+${notes || 'No notes added.'}`;
+
+      navigator.clipboard.writeText(template);
+      alert('Journal template copied to clipboard!');
+    };
+
+    return (
+      <div className={`${styles.positionPanel} ${isPanelMinimized ? styles.positionPanelMinimized : ''}`}>
+        {isPanelMinimized ? (
+          <button 
+            className={styles.minimizeIcon} 
+            onClick={() => setIsPanelMinimized(false)}
+            title="Expand Position Panel"
+          >
+            📊
+          </button>
+        ) : (
+          <>
+            {/* Panel Header */}
+            <div className={styles.positionPanelHeader}>
+              <div className={styles.panelTitle}>
+                <span>{isLong ? '🟢 Long Position' : '🔴 Short Position'}</span>
+                <span className={styles.smallId}>#{drawing.id.substring(0, 6)}</span>
+              </div>
+              <div className={styles.headerActions}>
+                <button 
+                  className={styles.minimizeBtn} 
+                  onClick={() => setIsPanelMinimized(true)}
+                  title="Minimize"
+                >
+                  ➖
+                </button>
+                <button 
+                  className={styles.closeBtn} 
+                  onClick={() => {
+                    if (drawingManagerRef.current) {
+                      drawingManagerRef.current.deselectAll();
+                    }
+                  }}
+                  title="Close Panel"
+                >
+                  ✖
+                </button>
+              </div>
+            </div>
+
+            {/* Tab Selection */}
+            <div className={styles.tabRow}>
+              <button 
+                className={`${styles.tabBtn} ${activePanelTab === 'stats' ? styles.tabBtnActive : ''}`}
+                onClick={() => setActivePanelTab('stats')}
+              >
+                📊 Size & Stats
+              </button>
+              <button 
+                className={`${styles.tabBtn} ${activePanelTab === 'targets' ? styles.tabBtnActive : ''}`}
+                onClick={() => setActivePanelTab('targets')}
+              >
+                🎯 Targets
+              </button>
+              <button 
+                className={`${styles.tabBtn} ${activePanelTab === 'journal' ? styles.tabBtnActive : ''}`}
+                onClick={() => setActivePanelTab('journal')}
+              >
+                📓 Journal
+              </button>
+              <button 
+                className={`${styles.tabBtn} ${activePanelTab === 'appearance' ? styles.tabBtnActive : ''}`}
+                onClick={() => setActivePanelTab('appearance')}
+              >
+                🎨 Style
+              </button>
+            </div>
+
+            {/* Scrollable Contents */}
+            <div className={styles.scrollContent}>
+              {activePanelTab === 'stats' && (
+                <>
+                  <div className={styles.panelRow}>
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Account Balance</span>
+                      <input 
+                        type="number" 
+                        className={styles.panelInput} 
+                        value={balance} 
+                        onChange={(e) => handleUpdatePanelOption('balance', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.panelRow}>
+                    <div className={styles.panelCol} style={{ flex: 2 }}>
+                      <span className={styles.panelLabel}>{useFixedAmount ? 'Fixed Risk Amount ($)' : 'Risk Percent (%)'}</span>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {useFixedAmount ? (
+                          <input 
+                            type="number" 
+                            className={styles.panelInput} 
+                            value={riskAmount} 
+                            onChange={(e) => handleUpdatePanelOption('riskAmount', parseFloat(e.target.value) || 0)}
+                          />
+                        ) : (
+                          <>
+                            <input 
+                              type="range" 
+                              min="0.1" 
+                              max="10" 
+                              step="0.1"
+                              value={riskPercent} 
+                              onChange={(e) => handleUpdatePanelOption('riskPercent', parseFloat(e.target.value))}
+                              style={{ flex: 1, accentColor: 'var(--accent)' }}
+                            />
+                            <span style={{ minWidth: '40px', fontWeight: 600 }}>{riskPercent}%</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className={styles.panelCol} style={{ flex: 1 }}>
+                      <span className={styles.panelLabel}>Risk Type</span>
+                      <button 
+                        className={styles.outlineBtn}
+                        onClick={() => handleUpdatePanelOption('useFixedAmount', !useFixedAmount)}
+                      >
+                        {useFixedAmount ? 'Fixed $' : 'Percent %'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className={styles.panelRow}>
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Leverage</span>
+                      <select 
+                        className={styles.panelSelect}
+                        value={leverage}
+                        onChange={(e) => handleUpdatePanelOption('leverage', e.target.value)}
+                      >
+                        <option value="1:1">1:1</option>
+                        <option value="1:10">1:10</option>
+                        <option value="1:50">1:50</option>
+                        <option value="1:100">1:100</option>
+                        <option value="1:200">1:200</option>
+                        <option value="1:500">1:500</option>
+                      </select>
+                    </div>
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Commission/lot ($)</span>
+                      <input 
+                        type="number" 
+                        className={styles.panelInput} 
+                        value={commission} 
+                        onChange={(e) => handleUpdatePanelOption('commission', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.panelRow}>
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Spread (pips)</span>
+                      <input 
+                        type="number" 
+                        className={styles.panelInput} 
+                        value={spread} 
+                        onChange={(e) => handleUpdatePanelOption('spread', parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.menuDivider} style={{ margin: '4px 0', opacity: 0.1 }} />
+
+                  {/* Calculator Outputs & Smart Stats */}
+                  <div className={styles.statsGrid}>
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Calculated Lot Size</span>
+                      <span className={styles.statVal} style={{ color: 'var(--accent)' }}>{lotSize.toFixed(2)} lots</span>
+                    </div>
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Risk : Reward Ratio</span>
+                      <span className={styles.statVal}>{rr.toFixed(2)} R</span>
+                    </div>
+
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Expected Profit (Net)</span>
+                      <span className={`${styles.statVal} ${styles.statGreen}`}>{formatCurrency(expectedProfit)}</span>
+                    </div>
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Expected Loss (Net)</span>
+                      <span className={`${styles.statVal} ${styles.statRed}`}>{formatCurrency(expectedLoss)}</span>
+                    </div>
+
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Required Win Rate</span>
+                      <span className={styles.statVal}>{winRateRequired.toFixed(1)}%</span>
+                    </div>
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Status</span>
+                      <span className={`${styles.statVal} ${status === 'Target Hit' ? styles.statGreen : status === 'Stopped Out' ? styles.statRed : ''}`}>{status}</span>
+                    </div>
+
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Max Favorable Excursion</span>
+                      <span className={`${styles.statVal} ${styles.statGreen}`}>{mfePips.toFixed(1)} pips</span>
+                    </div>
+                    <div className={styles.statBox}>
+                      <span className={styles.statLabel}>Max Adverse Excursion</span>
+                      <span className={`${styles.statVal} ${styles.statRed}`}>{maePips.toFixed(1)} pips</span>
+                    </div>
+
+                    <div className={`${styles.statBox} ${styles.statBoxFull}`}>
+                      <span className={styles.statLabel}>Trade Duration</span>
+                      <span className={styles.statVal}>{durationBars} bars ({status === 'Waiting' ? 'Not Entry Yet' : timeframe || '15m'})</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {activePanelTab === 'targets' && (
+                <>
+                  {/* Manual price level overrides */}
+                  <div className={styles.panelRow}>
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Entry Price</span>
+                      <input 
+                        type="number" 
+                        step={config.pipSize}
+                        className={styles.panelInput} 
+                        value={entry} 
+                        onChange={(e) => handleUpdateAnchorPrice(0, parseFloat(e.target.value) || 0)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.panelRow}>
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel} style={{ color: '#ef4444' }}>Stop Loss Price</span>
+                      <input 
+                        type="number" 
+                        step={config.pipSize}
+                        className={styles.panelInput} 
+                        value={stopLoss} 
+                        onChange={(e) => handleUpdateAnchorPrice(1, parseFloat(e.target.value) || 0)}
+                      />
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Distance: {riskPips.toFixed(1)} pips</span>
+                    </div>
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel} style={{ color: '#22c55e' }}>Take Profit Price</span>
+                      <input 
+                        type="number" 
+                        step={config.pipSize}
+                        className={styles.panelInput} 
+                        value={takeProfit} 
+                        onChange={(e) => handleUpdateAnchorPrice(2, parseFloat(e.target.value) || 0)}
+                      />
+                      <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Distance: {rewardPips.toFixed(1)} pips</span>
+                    </div>
+                  </div>
+
+                  <div className={styles.guidelinesBox}>
+                    <label className={styles.checkItem}>
+                      <input 
+                        type="checkbox" 
+                        checked={showGuidelines} 
+                        onChange={(e) => handleUpdatePanelOption('showGuidelines', e.target.checked)}
+                      />
+                      <span style={{ fontWeight: 600 }}>Show R-Multiples Target Lines</span>
+                    </label>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                      Draws horizontal targets representing 1R, 1.5R, 2R, and 3R multiples of risk directly on the chart.
+                    </span>
+                  </div>
+
+                  {/* Partial Profits Target Configurator */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>Partial Take Profits</span>
+                    {partials.map((pt: any, idx: number) => {
+                      const partialPips = Math.abs(pt.price - entry) / config.pipSize;
+                      const partialRR = riskPips > 0 ? (partialPips / riskPips) : 0;
+                      const expectedPartialProfit = (lotSize * (pt.percent / 100)) * partialPips * config.pipValue;
+
+                      return (
+                        <div key={idx} style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '6px', borderRadius: '6px' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={pt.active}
+                            onChange={() => handleTogglePartial(idx)}
+                          />
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.72rem', color: pt.active ? '#fff' : '#64748b' }}>TP {idx + 1} ({pt.percent}%)</span>
+                            <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>Profit: {pt.active ? formatCurrency(expectedPartialProfit) : '$0'} ({partialRR.toFixed(1)}R)</span>
+                          </div>
+                          <input 
+                            type="number"
+                            step={config.pipSize}
+                            disabled={!pt.active}
+                            className={styles.panelInput}
+                            style={{ width: '80px', padding: '4px', fontSize: '0.75rem', opacity: pt.active ? 1 : 0.4 }}
+                            value={pt.price}
+                            onChange={(e) => handleUpdatePartialPrice(idx, parseFloat(e.target.value) || 0)}
+                          />
+                          <input 
+                            type="number"
+                            disabled={!pt.active}
+                            className={styles.panelInput}
+                            style={{ width: '50px', padding: '4px', fontSize: '0.75rem', opacity: pt.active ? 1 : 0.4 }}
+                            value={pt.percent}
+                            onChange={(e) => handleUpdatePartialPercent(idx, parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {activePanelTab === 'journal' && (
+                <>
+                  <div className={styles.panelCol}>
+                    <span className={styles.panelLabel}>Trading Session Name</span>
+                    <input 
+                      type="text" 
+                      className={styles.panelInput} 
+                      value={sessionName}
+                      onChange={(e) => handleUpdatePanelOption('sessionName', e.target.value)}
+                    />
+                  </div>
+
+                  {/* Checklist */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={{ fontWeight: 600 }}>Strategy Checklist</span>
+                    <div className={styles.checklistGrid}>
+                      {['HTF Bias Confirmation', 'Liquidity Sweep', 'Market Structure Shift (MSS)', 'Order Block (OB) mitigation', 'Fair Value Gap (FVG) entry', 'Supply/Demand Zone interaction', 'Volume Expansion', 'Trading Session Open alignment', 'Red Folder News checked', 'Trend Alignment'].map((item) => (
+                        <label key={item} className={styles.checkItem}>
+                          <input 
+                            type="checkbox" 
+                            checked={!!checklist[item]} 
+                            onChange={() => handleToggleChecklist(item)}
+                          />
+                          <span>{item}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Psychology Log */}
+                  <div className={styles.psychologyGrid}>
+                    <span style={{ fontWeight: 600 }}>Psychology & Discipline</span>
+                    
+                    <div className={styles.panelRow}>
+                      <div className={styles.panelCol}>
+                        <span className={styles.panelLabel}>Dominant Emotion</span>
+                        <select 
+                          className={styles.panelSelect}
+                          value={psychology.emotion}
+                          onChange={(e) => handleUpdatePsychology('emotion', e.target.value)}
+                        >
+                          <option value="Calm">Calm / Patient</option>
+                          <option value="Neutral">Neutral</option>
+                          <option value="Greedy">Greedy / FOMO</option>
+                          <option value="Fearful">Fearful / Hesitant</option>
+                          <option value="Anxious">Anxious / Nervous</option>
+                          <option value="Angry">Angry / Revengeful</option>
+                        </select>
+                      </div>
+
+                      <div className={styles.panelCol}>
+                        <span className={styles.panelLabel}>Confidence (1-5)</span>
+                        <select 
+                          className={styles.panelSelect}
+                          value={psychology.confidence}
+                          onChange={(e) => handleUpdatePsychology('confidence', parseInt(e.target.value))}
+                        >
+                          <option value="1">⭐</option>
+                          <option value="2">⭐⭐</option>
+                          <option value="3">⭐⭐⭐</option>
+                          <option value="4">⭐⭐⭐⭐</option>
+                          <option value="5">⭐⭐⭐⭐⭐</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <label className={styles.checkItem} style={{ width: '45%' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={!!psychology.ruleFollowed} 
+                          onChange={(e) => handleUpdatePsychology('ruleFollowed', e.target.checked)}
+                        />
+                        <span>Rules Followed</span>
+                      </label>
+                      <label className={styles.checkItem} style={{ width: '45%' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={!!psychology.fomo} 
+                          onChange={(e) => handleUpdatePsychology('fomo', e.target.checked)}
+                        />
+                        <span>FOMO Entry</span>
+                      </label>
+                      <label className={styles.checkItem} style={{ width: '45%' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={!!psychology.revengeTrade} 
+                          onChange={(e) => handleUpdatePsychology('revengeTrade', e.target.checked)}
+                        />
+                        <span>Revenge Trade</span>
+                      </label>
+                    </div>
+
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Patience Rating: {psychology.patience}/10</span>
+                      <input 
+                        type="range" 
+                        min="1" 
+                        max="10" 
+                        value={psychology.patience || 5} 
+                        onChange={(e) => handleUpdatePsychology('patience', parseInt(e.target.value))}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                    </div>
+
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Discipline Rating: {psychology.discipline}/10</span>
+                      <input 
+                        type="range" 
+                        min="1" 
+                        max="10" 
+                        value={psychology.discipline || 5} 
+                        onChange={(e) => handleUpdatePsychology('discipline', parseInt(e.target.value))}
+                        style={{ accentColor: 'var(--accent)' }}
+                      />
+                    </div>
+
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Mistakes Made</span>
+                      <div className={styles.pillsRow}>
+                        {['None', 'Overleveraged', 'Chased Price', 'Moved Stop Too Early', 'Closed Too Early', 'Ignored Rules', 'Flipped Bias', 'Felt Anxious'].map((m) => {
+                          const active = (psychology.mistakes || []).includes(m);
+                          return (
+                            <span 
+                              key={m} 
+                              className={`${styles.pill} ${active ? styles.pillActive : ''}`}
+                              onClick={() => {
+                                const curr = psychology.mistakes || [];
+                                const next = curr.includes(m) ? curr.filter((x: string) => x !== m) : [...curr, m];
+                                handleUpdatePsychology('mistakes', next);
+                              }}
+                            >
+                              {m}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className={styles.panelCol}>
+                      <span className={styles.panelLabel}>Lessons Learned / Refined Plan</span>
+                      <textarea 
+                        className={styles.notesArea}
+                        value={psychology.lessons || ''}
+                        onChange={(e) => handleUpdatePsychology('lessons', e.target.value)}
+                        placeholder="Write down reflections, lessons or notes on discipline..."
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.panelCol}>
+                    <span className={styles.panelLabel}>General Trade Notes</span>
+                    <textarea 
+                      className={styles.notesArea} 
+                      value={notes}
+                      onChange={(e) => handleUpdatePanelOption('notes', e.target.value)}
+                      placeholder="Add charting markup explanations or trade logs..."
+                    />
+                  </div>
+                </>
+              )}
+
+              {activePanelTab === 'appearance' && (
+                <>
+                  <div className={styles.panelCol}>
+                    <span className={styles.panelLabel}>Smart Snapping Mode</span>
+                    <select 
+                      className={styles.panelSelect}
+                      value={snapMode}
+                      onChange={(e) => handleUpdatePanelOption('snapMode', e.target.value)}
+                    >
+                      <option value="none">None (Free Dragging)</option>
+                      <option value="high-low">Wick Snapping (High/Low)</option>
+                      <option value="ohlc">Body/Wick Snapping (OHLC)</option>
+                      <option value="round">Round Price Snapping</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.panelCol}>
+                    <span className={styles.panelLabel}>Line Thickness</span>
+                    <select 
+                      className={styles.panelSelect}
+                      value={drawing.style?.lineWidth || 1}
+                      onChange={(e) => handleUpdateStyle({ lineWidth: parseInt(e.target.value) || 1 })}
+                    >
+                      <option value="1">1 px</option>
+                      <option value="2">2 px</option>
+                      <option value="3">3 px</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.panelCol}>
+                    <span className={styles.panelLabel}>Text Font Size</span>
+                    <select 
+                      className={styles.panelSelect}
+                      value={drawing.style?.fontSize || 12}
+                      onChange={(e) => handleUpdateStyle({ fontSize: parseInt(e.target.value) || 12 })}
+                    >
+                      <option value="10">10 px</option>
+                      <option value="12">12 px</option>
+                      <option value="14">14 px</option>
+                    </select>
+                  </div>
+
+                  <div className={styles.menuDivider} style={{ margin: '10px 0', opacity: 0.1 }} />
+
+                  {/* Export Box */}
+                  <div className={styles.exportBox}>
+                    <span style={{ fontWeight: 600 }}>Journal Copy & Export</span>
+                    <p style={{ fontSize: '0.68rem', color: '#94a3b8', margin: 0 }}>
+                      Copy a beautifully-formatted markdown summary of this trade to paste directly into your journal sheet.
+                    </p>
+                    <button className={styles.actionBtn} onClick={copyJournalTemplate}>
+                      📋 Copy Markdown Journal
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className={styles.chartWrapper}>
+    <div ref={wrapperRef} className={styles.chartWrapper}>
       <div ref={containerRef} className={styles.chartContainer} />
 
       {/* Drawing Overlay Components */}
@@ -2098,6 +3361,180 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
           onClose={() => setSettingsModalId(null)}
           onSave={handleSaveSettings}
         />
+      )}
+
+      {/* Position Tool Panel */}
+      {isPositionTool && renderPositionToolPanel(selectedDrawing)}
+
+      {/* Fullscreen Overlay Controls */}
+      {isFullscreen && (
+        <>
+          {/* Top-Left Replay Panel Toggle Button */}
+          <button 
+            className={`${styles.fsToggleBtn} ${styles.fsReplayToggle}`}
+            onClick={() => setShowFullscreenReplay(!showFullscreenReplay)}
+          >
+            {showFullscreenReplay ? 'Hide Replay ▲' : 'Show Replay ▼'}
+          </button>
+
+          {/* Replay Panel Overlay */}
+          {showFullscreenReplay && (
+            <div className={styles.fsReplayPanel}>
+              <div className={styles.fsPanelTitle}>
+                <span>Replay Controls</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>🎬</span>
+              </div>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <button
+                  className={styles.actionBtn}
+                  onClick={onResetReplay}
+                  title="Reset (R)"
+                  style={{ flex: 1, padding: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                >
+                  ⏮
+                </button>
+                <button
+                  className={styles.actionBtn}
+                  onClick={onStepBackward}
+                  title="Step Backward (ArrowLeft)"
+                  style={{ flex: 1, padding: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                >
+                  ⏪
+                </button>
+                <button
+                  className={styles.actionBtn}
+                  onClick={onTogglePlay}
+                  style={{
+                    backgroundColor: isPlaying ? 'var(--term-accent, #7d79f2)' : 'rgba(255,255,255,0.04)',
+                    flex: 1.5,
+                    padding: '6px',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center'
+                  }}
+                  title="Play/Pause (Space)"
+                >
+                  {isPlaying ? '⏸' : '▶'}
+                </button>
+                <button
+                  className={styles.actionBtn}
+                  onClick={onStepForward}
+                  title="Step Forward (ArrowRight)"
+                  style={{ flex: 1, padding: '6px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                >
+                  ⏭
+                </button>
+              </div>
+
+              {/* Speed Controller */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Play Speed</span>
+                <div style={{ display: 'flex', gap: '3px' }}>
+                  {[
+                    { label: '1/s', ms: 1000 },
+                    { label: '2/s', ms: 500 },
+                    { label: '3/s', ms: 333 },
+                    { label: '4/s', ms: 250 },
+                    { label: '5/s', ms: 200 },
+                  ].map(sp => (
+                    <button
+                      key={sp.ms}
+                      onClick={() => onSpeedChange?.(sp.ms)}
+                      style={{
+                        flex: 1,
+                        padding: '4px 2px',
+                        fontSize: '0.68rem',
+                        background: speed === sp.ms ? 'var(--term-accent, #7d79f2)' : 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '4px',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                    >
+                      {sp.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Counter */}
+              <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center', marginTop: '4px' }}>
+                {(currentIndex ?? 0) + 1} / {totalCandlesCount ?? 0} candles
+              </div>
+            </div>
+          )}
+
+          {/* Bottom-Right Positions Toggle Button */}
+          <button 
+            className={`${styles.fsToggleBtn} ${styles.fsPositionsToggle}`}
+            onClick={() => setShowFullscreenPositions(!showFullscreenPositions)}
+          >
+            💼 Positions ({positions.length}) {showFullscreenPositions ? '▲' : '▼'}
+          </button>
+
+          {/* Positions Bar Overlay */}
+          {showFullscreenPositions && (
+            <div className={styles.fsPositionsPanel}>
+              <div className={styles.fsPanelTitle}>
+                <span>Active Positions ({positions.length})</span>
+                <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>💼</span>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {positions.length === 0 ? (
+                  <div style={{ color: '#64748b', fontSize: '0.8rem', padding: '1rem 0', textAlign: 'center' }}>
+                    No active open positions.
+                  </div>
+                ) : (
+                  <table className={styles.bottomTable} style={{ fontSize: '0.75rem', width: '100%' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                        <th style={{ textAlign: 'left', padding: '4px' }}>Symbol</th>
+                        <th style={{ textAlign: 'left', padding: '4px' }}>Type</th>
+                        <th style={{ textAlign: 'right', padding: '4px' }}>Lots</th>
+                        <th style={{ textAlign: 'right', padding: '4px' }}>Entry</th>
+                        <th style={{ textAlign: 'right', padding: '4px' }}>PnL (USD)</th>
+                        <th style={{ textAlign: 'center', padding: '4px' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {positions.map(pos => (
+                        <tr key={pos.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <td style={{ padding: '6px 4px' }}>{pos.symbol}</td>
+                          <td style={{ padding: '6px 4px', color: pos.type === 'BUY' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
+                            {pos.type}
+                          </td>
+                          <td style={{ padding: '6px 4px', textAlign: 'right' }}>{pos.lotSize.toFixed(2)}</td>
+                          <td style={{ padding: '6px 4px', textAlign: 'right' }}>{pos.entryPrice.toFixed(2)}</td>
+                          <td style={{ padding: '6px 4px', textAlign: 'right', color: pos.unrealizedPnl >= 0 ? '#10b981' : '#ef4444', fontWeight: 600 }}>
+                            ${pos.unrealizedPnl.toFixed(2)}
+                          </td>
+                          <td style={{ padding: '6px 4px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => onClosePosition?.(pos.id, 100)}
+                              style={{
+                                background: 'rgba(239, 68, 68, 0.15)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                color: '#f87171',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '0.68rem',
+                                cursor: 'pointer',
+                                fontWeight: 600
+                              }}
+                            >
+                              Close
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
