@@ -53,6 +53,136 @@ import {
   DrawingSettingsModal,
 } from './DrawingControls';
 
+
+// ── RECTANGLE 8-HANDLE PROTOTYPE OVERRIDES ──
+if (typeof window !== 'undefined') {
+  const proto = (Rectangle as any).prototype;
+
+  proto.getControlPoints = function (viewport: any) {
+    if (!this.anchors || this.anchors.length === 0) return [];
+    
+    // First anchor pixel
+    const p0 = this.anchorToPixel(this.anchors[0], viewport);
+    if (!p0) return [];
+
+    // If only one anchor exists (drawing in progress), show one handle
+    if (this.anchors.length < 2) {
+      return [{ index: 0, x: p0.x, y: p0.y, radius: 5 }];
+    }
+
+    // Second anchor pixel
+    const p1 = this.anchorToPixel(this.anchors[1], viewport);
+    if (!p1) return [{ index: 0, x: p0.x, y: p0.y, radius: 5 }];
+
+    const minX = Math.min(p0.x, p1.x);
+    const maxX = Math.max(p0.x, p1.x);
+    const minY = Math.min(p0.y, p1.y);
+    const maxY = Math.max(p0.y, p1.y);
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+
+    // Return 8 control points: 4 corners + 4 middle points
+    return [
+      { index: 0, x: minX, y: minY, radius: 5 }, // Top-Left
+      { index: 1, x: maxX, y: minY, radius: 5 }, // Top-Right
+      { index: 2, x: maxX, y: maxY, radius: 5 }, // Bottom-Right
+      { index: 3, x: minX, y: maxY, radius: 5 }, // Bottom-Left
+      { index: 4, x: midX, y: minY, radius: 5 }, // Top-Middle
+      { index: 5, x: maxX, y: midY, radius: 5 }, // Right-Middle
+      { index: 6, x: midX, y: maxY, radius: 5 }, // Bottom-Middle
+      { index: 7, x: minX, y: midY, radius: 5 }  // Left-Middle
+    ];
+  };
+
+  proto.updateAnchor = function (index: number, anchor: any) {
+    const viewport = this.getViewport();
+    if (!viewport || !this.anchors || this.anchors.length < 2) {
+      if (this.anchors && index < this.anchors.length) {
+        this.anchors[index] = anchor;
+      }
+      this.requestUpdate();
+      return;
+    }
+
+    // Current coordinates
+    const p0 = this.anchorToPixel(this.anchors[0], viewport);
+    const p1 = this.anchorToPixel(this.anchors[1], viewport);
+    if (!p0 || !p1) {
+      if (index < this.anchors.length) {
+        this.anchors[index] = anchor;
+      }
+      this.requestUpdate();
+      return;
+    }
+
+    // New position from mouse
+    const pNew = this.anchorToPixel(anchor, viewport);
+    if (!pNew) return;
+
+    let left = Math.min(p0.x, p1.x);
+    let right = Math.max(p0.x, p1.x);
+    let top = Math.min(p0.y, p1.y);
+    let bottom = Math.max(p0.y, p1.y);
+
+    const isC0Left = p0.x <= p1.x;
+    const isC0Top = p0.y <= p1.y;
+
+    // Constrain updates based on which of the 8 handles is dragged
+    switch (index) {
+      case 0: // Top-Left
+        left = pNew.x;
+        top = pNew.y;
+        break;
+      case 1: // Top-Right
+        right = pNew.x;
+        top = pNew.y;
+        break;
+      case 2: // Bottom-Right
+        right = pNew.x;
+        bottom = pNew.y;
+        break;
+      case 3: // Bottom-Left
+        left = pNew.x;
+        bottom = pNew.y;
+        break;
+      case 4: // Top-Middle
+        top = pNew.y;
+        break;
+      case 5: // Right-Middle
+        right = pNew.x;
+        break;
+      case 6: // Bottom-Middle
+        bottom = pNew.y;
+        break;
+      case 7: // Left-Middle
+        left = pNew.x;
+        break;
+      default:
+        return;
+    }
+
+    // Reconstruct pixel anchors based on original mapping
+    const newP0 = {
+      x: isC0Left ? left : right,
+      y: isC0Top ? top : bottom
+    };
+    const newP1 = {
+      x: isC0Left ? right : left,
+      y: isC0Top ? bottom : top
+    };
+
+    // Convert back to chart anchors
+    const newAnchor0 = this.pixelToAnchor(newP0, viewport);
+    const newAnchor1 = this.pixelToAnchor(newP1, viewport);
+
+    if (newAnchor0 && newAnchor1) {
+      this.anchors[0] = newAnchor0;
+      this.anchors[1] = newAnchor1;
+      this.requestUpdate();
+    }
+  };
+}
+
 interface ChartProps {
   candles: CandleData[];
   markers?: ChartMarker[];
@@ -950,7 +1080,16 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
           isDraggingAnchor = true;
           dragAnchorIndex = anchorIndex;
           dragAnchorDrawing = selected;
-          originalAnchors = selected.anchors.map((a: any) => ({ ...a }));
+          
+          const viewport = selected.getViewport();
+          if (viewport) {
+            originalAnchors = selected.getControlPoints(viewport).map((cp: any) => {
+              const anchor = (selected as any).pixelToAnchor(cp, viewport);
+              return anchor ? { ...anchor } : { time: 0, price: 0 };
+            });
+          } else {
+            originalAnchors = selected.anchors.map((a: any) => ({ ...a }));
+          }
 
           // Disable chart scrolling during anchor dragging
           chart.applyOptions({
