@@ -45,3 +45,4 @@ next-env.d.ts
 
 # local data
 /data/
+.log_created
