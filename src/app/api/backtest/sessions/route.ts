@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -78,6 +79,8 @@ export async function POST(req: NextRequest) {
         markers: [],
       },
     });
+
+    logger.info('SESSION', `Created new backtest session named "${session.name}" with starting balance of $${session.initialBalance}`);
 
     return NextResponse.json({ success: true, data: session });
   } catch (error: any) {

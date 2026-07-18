@@ -1,9 +1,21 @@
 import { PrismaClient } from '@prisma/client';
+import { logger } from './logger';
 
 const prismaClientSingleton = () => {
-  return new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+  const client = new PrismaClient({
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'stdout', level: 'warn' },
+      { emit: 'stdout', level: 'error' },
+    ],
   });
+
+  // @ts-ignore
+  client.$on('query', (e: any) => {
+    logger.info('DATABASE', `${e.query} | Params: ${e.params} | Duration: ${e.duration}ms`);
+  });
+
+  return client;
 };
 
 declare global {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { logger } from '@/lib/logger';
 
 export async function GET(
   req: NextRequest,
@@ -74,6 +75,8 @@ export async function PUT(
       }
       throw updateErr; // re-throw any other error
     }
+
+    logger.info('SESSION', `Saved/Updated backtest session "${session.name}" (ID: ${id}) - Balance: $${session.currentBalance}`);
 
     return NextResponse.json({ success: true, data: session });
   } catch (error: any) {
