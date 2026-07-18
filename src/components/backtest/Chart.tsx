@@ -59,6 +59,15 @@ if (typeof window !== 'undefined') {
   const proto = (Rectangle as any).prototype;
 
   proto.getControlPoints = function (viewport: any) {
+    if (this.id === 'preview') {
+      const pts: any[] = [];
+      for (let s = 0; s < this.anchors.length; s++) {
+        const p = this.anchorToPixel(this.anchors[s], viewport);
+        if (p) pts.push({ index: s, x: p.x, y: p.y, radius: 5 });
+      }
+      return pts;
+    }
+
     if (!this.anchors || this.anchors.length === 0) return [];
     
     // First anchor pixel
@@ -95,6 +104,14 @@ if (typeof window !== 'undefined') {
   };
 
   proto.updateAnchor = function (index: number, anchor: any) {
+    if (this.id === 'preview') {
+      if (this.anchors && index < this.anchors.length) {
+        this.anchors[index] = anchor;
+      }
+      this.requestUpdate();
+      return;
+    }
+
     const viewport = this.getViewport();
     if (!viewport || !this.anchors || this.anchors.length < 2) {
       if (this.anchors && index < this.anchors.length) {
