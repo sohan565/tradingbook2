@@ -240,6 +240,21 @@ export default function BacktestPage() {
     localStorage.setItem('tradingbook_show_trade_levels', String(showTradeLevels));
   }, [showTradeLevels]);
 
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (isSettingsOpen && settingsBtnRef.current) {
+      const rect = settingsBtnRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 6,
+        left: rect.right + window.scrollX - 220,
+      });
+    } else {
+      setDropdownPosition(null);
+    }
+  }, [isSettingsOpen]);
+
   // Timer reference for playback
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visibleCandlesRef = useRef<CandleData[]>([]);
@@ -2312,6 +2327,7 @@ export default function BacktestPage() {
 
           <div style={{ position: 'relative' }}>
             <button
+              ref={settingsBtnRef}
               className={styles.topBarBtn}
               title="Chart Display Settings"
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
@@ -2329,7 +2345,14 @@ export default function BacktestPage() {
                   style={{ position: 'fixed', inset: 0, zIndex: 29999 }} 
                   onClick={() => setIsSettingsOpen(false)} 
                 />
-                <div className={styles.settingsDropdown}>
+                <div 
+                  className={styles.settingsDropdown}
+                  style={{
+                    position: 'fixed',
+                    top: dropdownPosition ? `${dropdownPosition.top}px` : 'auto',
+                    left: dropdownPosition ? `${dropdownPosition.left}px` : 'auto',
+                  }}
+                >
                   <div className={styles.settingsDropdownTitle}>Chart Options</div>
                   <label className={styles.settingsDropdownItem}>
                     <input
