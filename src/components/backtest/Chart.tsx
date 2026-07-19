@@ -24,7 +24,7 @@ import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay, TradeRecord } 
 import styles from './Chart.module.css';
 import { computeHeikinAshi } from '@/lib/heikin-ashi';
 import { TIMEFRAME_SECONDS } from '@/lib/aggregator';
-import { getSymbolConfig, formatPrice, formatCurrency, formatPips, formatPercent } from '@/lib/trade-math';
+import { getSymbolConfig, formatPrice, formatCurrency, formatPips, formatPercent, calculatePnL } from '@/lib/trade-math';
 
 // Import Drawing tools from lightweight-charts-drawing
 import {
@@ -227,6 +227,8 @@ interface ChartProps {
   closedTrades?: TradeRecord[];
   showTradeHistory?: boolean;
   showTradeLevels?: boolean;
+  onUpdateSLTP?: (id: string, sl: number | undefined, tp: number | undefined) => void;
+  onUpdateEntryPrice?: (id: string, entryPrice: number) => void;
 }
 
 export interface ChartRef {
@@ -453,6 +455,8 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   closedTrades = [],
   showTradeHistory = true,
   showTradeLevels = true,
+  onUpdateSLTP,
+  onUpdateEntryPrice,
 }: ChartProps, ref) {
   const isShiftPressedRef = useRef(false);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
@@ -477,6 +481,30 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const activeToolRef = useRef<string | null>(activeTool);
   const pendingAnchorsRef = useRef<Anchor[]>([]);
   const prevSessionKeyRef = useRef<string | undefined>(sessionKey);
+
+  // Interactive Position Manager States
+  const [activeDrag, setActiveDrag] = useState<{
+    positionId: string;
+    type: 'entry' | 'sl' | 'tp';
+    startY: number;
+    startPrice: number;
+    currentPrice: number;
+  } | null>(null);
+
+  const [pendingMutation, setPendingMutation] = useState<{
+    positionId: string;
+    type: 'entry' | 'sl' | 'tp';
+    price: number;
+  } | null>(null);
+
+  const [inlineEdit, setInlineEdit] = useState<{
+    positionId: string;
+    type: 'entry' | 'sl' | 'tp';
+    value: string;
+  } | null>(null);
+
+  const [chartRect, setChartRect] = useState<{ width: number; height: number } | null>(null);
+  const [viewportTrigger, setViewportTrigger] = useState(0);
 
   // References for Drawing Manager
   const drawingManagerRef = useRef<DrawingManager | null>(null);
@@ -2018,6 +2046,134 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     };
   }, [onCrosshairMove, chartType]);
 
+  // 1. Sync viewport dimensions & scale changes
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const handleViewportChange = () => {
+      setViewportTrigger(prev => prev + 1);
+    };
+
+    // Listen to timescale scroll/zoom
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleViewportChange);
+
+    // Initial rect
+    if (containerRef.current) {
+      setChartRect({
+        width: containerRef.current.clientWidth,
+        height: containerRef.current.clientHeight,
+      });
+    }
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length === 0 || !entries[0].contentRect) return;
+      if (containerRef.current) {
+        setChartRect({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
+      }
+      setViewportTrigger(prev => prev + 1);
+    });
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(handleViewportChange);
+      resizeObserver.disconnect();
+    };
+  }, [candles]);
+
+  // 2. Global mouse drag-and-drop state machine (when activeDrag is not null)
+  useEffect(() => {
+    if (!activeDrag) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      const container = containerRef.current;
+      const candleSeries = candleSeriesRef.current;
+      if (!container || !candleSeries) return;
+
+      const rect = container.getBoundingClientRect();
+      const currentY = e.clientY - rect.top;
+
+      // Clamp Y between viewport boundaries
+      const clampedY = Math.max(0, Math.min(rect.height, currentY));
+
+      // Convert coordinate to price
+      const rawPrice = candleSeries.coordinateToPrice(clampedY);
+      if (rawPrice === null) return;
+
+      const config = getSymbolConfig(_symbol);
+      // Snap to instrument min pip size (e.g. 0.1 for Gold)
+      const snappedPrice = Math.round(rawPrice / config.pipSize) * config.pipSize;
+
+      // Apply inversion guards & boundaries
+      const position = positions.find(p => p.id === activeDrag.positionId);
+      if (!position) return;
+
+      let finalPrice = snappedPrice;
+      const entryPrice = activeDrag.type === 'entry' ? snappedPrice : position.entryPrice;
+
+      if (activeDrag.type === 'tp') {
+        if (position.type === 'BUY') {
+          // TP must be above entry
+          finalPrice = Math.max(entryPrice + config.pipSize, snappedPrice);
+        } else {
+          // TP must be below entry
+          finalPrice = Math.min(entryPrice - config.pipSize, snappedPrice);
+        }
+      } else if (activeDrag.type === 'sl') {
+        if (position.type === 'BUY') {
+          // SL must be below entry
+          finalPrice = Math.min(entryPrice - config.pipSize, snappedPrice);
+        } else {
+          // SL must be above entry
+          finalPrice = Math.max(entryPrice + config.pipSize, snappedPrice);
+        }
+      }
+
+      setActiveDrag(prev => prev ? { ...prev, currentPrice: parseFloat(finalPrice.toFixed(config.digits)) } : null);
+    };
+
+    const handlePointerUp = () => {
+      if (activeDrag) {
+        // Only trigger mutation confirmation if price actually changed
+        if (activeDrag.currentPrice !== activeDrag.startPrice) {
+          setPendingMutation({
+            positionId: activeDrag.positionId,
+            type: activeDrag.type,
+            price: activeDrag.currentPrice,
+          });
+        }
+        setActiveDrag(null);
+      }
+
+      // Re-enable chart scale and scroll
+      chartRef.current?.applyOptions({
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+          horzTouchDrag: true,
+          vertTouchDrag: true,
+        },
+        handleScale: {
+          mouseWheel: true,
+          pinch: true,
+        }
+      });
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [activeDrag, positions, _symbol]);
+
   // Sync Timeframe-specific visibility filter
   useEffect(() => {
     const manager = drawingManagerRef.current;
@@ -2615,95 +2771,17 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     const currentLinesMap = priceLinesRef.current;
 
-    // If showTradeLevels is false, remove all price lines and exit
-    if (!showTradeLevels) {
-      for (const [posId, lines] of currentLinesMap.entries()) {
-        try {
-          if (lines.entry) candleSeries.removePriceLine(lines.entry);
-          if (lines.sl) candleSeries.removePriceLine(lines.sl);
-          if (lines.tp) candleSeries.removePriceLine(lines.tp);
-        } catch (e) {
-          console.error('Failed to remove price line:', e);
-        }
-      }
-      currentLinesMap.clear();
-      return;
-    }
-
-    // Identify position IDs that are no longer active
-    const activePositionIds = new Set(positions.map((p) => p.id));
+    // Clear all static price lines (they are now rendered interactively by PositionManager)
     for (const [posId, lines] of currentLinesMap.entries()) {
-      if (!activePositionIds.has(posId)) {
-        // Remove lines from series
-        try {
-          if (lines.entry) candleSeries.removePriceLine(lines.entry);
-          if (lines.sl) candleSeries.removePriceLine(lines.sl);
-          if (lines.tp) candleSeries.removePriceLine(lines.tp);
-        } catch (e) {
-          console.error('Failed to remove price line:', e);
-        }
-        currentLinesMap.delete(posId);
+      try {
+        if (lines.entry) candleSeries.removePriceLine(lines.entry);
+        if (lines.sl) candleSeries.removePriceLine(lines.sl);
+        if (lines.tp) candleSeries.removePriceLine(lines.tp);
+      } catch (e) {
+        console.error('Failed to remove price line:', e);
       }
     }
-
-    // Add or update lines for current positions
-    for (const position of positions) {
-      const existingLines = currentLinesMap.get(position.id);
-
-      // If they exist, let's clean them up first and recreate to ensure they reflect current SL/TP updates
-      if (existingLines) {
-        try {
-          if (existingLines.entry) candleSeries.removePriceLine(existingLines.entry);
-          if (existingLines.sl) candleSeries.removePriceLine(existingLines.sl);
-          if (existingLines.tp) candleSeries.removePriceLine(existingLines.tp);
-        } catch (e) {
-          // ignore if already deleted
-        }
-        currentLinesMap.delete(position.id);
-      }
-
-      // Create entry line (lineWidth must be an integer: 1, 2, 3, or 4)
-      const entryLine = candleSeries.createPriceLine({
-        price: position.entryPrice,
-        color: position.type === 'BUY' ? '#10b981' : '#f43f5e',
-        lineWidth: 2,
-        lineStyle: LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: `${position.type} ${position.lotSize} Lot @ ${position.entryPrice}`,
-      });
-
-      // Create SL line if set
-      let slLine;
-      if (position.stopLoss) {
-        slLine = candleSeries.createPriceLine({
-          price: position.stopLoss,
-          color: 'rgba(244, 63, 94, 0.8)',
-          lineWidth: 1,
-          lineStyle: LineStyle.Dotted,
-          axisLabelVisible: true,
-          title: `SL: ${position.stopLoss}`,
-        });
-      }
-
-      // Create TP line if set
-      let tpLine;
-      if (position.takeProfit) {
-        tpLine = candleSeries.createPriceLine({
-          price: position.takeProfit,
-          color: 'rgba(16, 185, 129, 0.8)',
-          lineWidth: 1,
-          lineStyle: LineStyle.Dotted,
-          axisLabelVisible: true,
-          title: `TP: ${position.takeProfit}`,
-        });
-      }
-
-      currentLinesMap.set(position.id, {
-        entry: entryLine,
-        sl: slLine,
-        tp: tpLine,
-      });
-    }
+    currentLinesMap.clear();
   }, [positions, showTradeLevels]);
 
   const selectedDrawing = selectedDrawingId ? drawingManagerRef.current?.getDrawing(selectedDrawingId) : null;
@@ -3473,6 +3551,533 @@ ${notes || 'No notes added.'}`;
     );
   };
 
+  // Position Management Tool Helpers & Renderers
+  const [selectedPositionId, setSelectedPositionIdState] = useState<string | null>(null);
+
+  const getLevelPrice = (position: OpenPosition, type: 'entry' | 'sl' | 'tp') => {
+    if (activeDrag && activeDrag.positionId === position.id && activeDrag.type === type) {
+      return activeDrag.currentPrice;
+    }
+    if (pendingMutation && pendingMutation.positionId === position.id && pendingMutation.type === type) {
+      return pendingMutation.price;
+    }
+    if (type === 'entry') return position.entryPrice;
+    if (type === 'sl') return position.stopLoss;
+    if (type === 'tp') return position.takeProfit;
+    return undefined;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent, positionId: string, type: 'entry' | 'sl' | 'tp', currentPrice: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = containerRef.current!.getBoundingClientRect();
+    const startY = e.clientY - rect.top;
+
+    setActiveDrag({
+      positionId,
+      type,
+      startY,
+      startPrice: currentPrice,
+      currentPrice: currentPrice,
+    });
+
+    // Disable scale/scroll
+    chartRef.current?.applyOptions({
+      handleScroll: false,
+      handleScale: false,
+    });
+  };
+
+  const handleConfirmMutation = (pos: OpenPosition, type: 'entry' | 'sl' | 'tp', price: number) => {
+    if (type === 'entry') {
+      if (onUpdateEntryPrice) {
+        onUpdateEntryPrice(pos.id, price);
+      }
+    } else if (type === 'sl') {
+      if (onUpdateSLTP) {
+        onUpdateSLTP(pos.id, price, pos.takeProfit);
+      }
+    } else if (type === 'tp') {
+      if (onUpdateSLTP) {
+        onUpdateSLTP(pos.id, pos.stopLoss, price);
+      }
+    }
+    setPendingMutation(null);
+  };
+
+  const handleDiscardMutation = () => {
+    setPendingMutation(null);
+  };
+
+  const handleAddTP = (position: OpenPosition) => {
+    const config = getSymbolConfig(_symbol);
+    const defaultTP = position.type === 'BUY'
+      ? position.entryPrice + 50 * config.pipSize
+      : position.entryPrice - 50 * config.pipSize;
+    
+    setPendingMutation({
+      positionId: position.id,
+      type: 'tp',
+      price: parseFloat(defaultTP.toFixed(config.digits)),
+    });
+  };
+
+  const handleAddSL = (position: OpenPosition) => {
+    const config = getSymbolConfig(_symbol);
+    const defaultSL = position.type === 'BUY'
+      ? position.entryPrice - 30 * config.pipSize
+      : position.entryPrice + 30 * config.pipSize;
+    
+    setPendingMutation({
+      positionId: position.id,
+      type: 'sl',
+      price: parseFloat(defaultSL.toFixed(config.digits)),
+    });
+  };
+
+  const handleRemoveLevel = (pos: OpenPosition, type: 'sl' | 'tp') => {
+    if (type === 'sl') {
+      if (onUpdateSLTP) {
+        onUpdateSLTP(pos.id, undefined, pos.takeProfit);
+      }
+    } else if (type === 'tp') {
+      if (onUpdateSLTP) {
+        onUpdateSLTP(pos.id, pos.stopLoss, undefined);
+      }
+    }
+  };
+
+  const handleInlineInputKeyDown = (e: React.KeyboardEvent, pos: OpenPosition, type: 'entry' | 'sl' | 'tp') => {
+    if (e.key === 'Enter') {
+      const parsed = parseFloat(inlineEdit?.value || '');
+      if (!isNaN(parsed)) {
+        handleConfirmMutation(pos, type, parsed);
+      }
+      setInlineEdit(null);
+    } else if (e.key === 'Escape') {
+      setInlineEdit(null);
+    }
+  };
+
+  const handleInlineInputBlur = (pos: OpenPosition, type: 'entry' | 'sl' | 'tp') => {
+    const parsed = parseFloat(inlineEdit?.value || '');
+    if (!isNaN(parsed)) {
+      handleConfirmMutation(pos, type, parsed);
+    }
+    setInlineEdit(null);
+  };
+
+  // Esc listener effect for pending mutations
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (inlineEdit) {
+          setInlineEdit(null);
+          e.preventDefault();
+        } else if (pendingMutation) {
+          setPendingMutation(null);
+          e.preventDefault();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleEscKey);
+    return () => {
+      window.removeEventListener('keydown', handleEscKey);
+    };
+  }, [inlineEdit, pendingMutation]);
+
+  const renderPositionManagerOverlay = () => {
+    const activePositions = positions || [];
+    if (activePositions.length === 0 || !chartRef.current || !candleSeriesRef.current || !chartRect) {
+      return null;
+    }
+
+    const currentMarketPrice = candles.length > 0 ? candles[candles.length - 1].close : 0;
+    const config = getSymbolConfig(_symbol);
+
+    return (
+      <div className={styles.posOverlayContainer}>
+        {/* SVG Drawing Layer */}
+        <svg className={styles.posSvgOverlay} width={chartRect.width} height={chartRect.height}>
+          {activePositions.map((pos) => {
+            const entryPrice = getLevelPrice(pos, 'entry') || pos.entryPrice;
+            const slPrice = getLevelPrice(pos, 'sl');
+            const tpPrice = getLevelPrice(pos, 'tp');
+
+            const yEntry = candleSeriesRef.current!.priceToCoordinate(entryPrice);
+            const ySL = slPrice !== undefined && slPrice !== null ? candleSeriesRef.current!.priceToCoordinate(slPrice) : null;
+            const yTP = tpPrice !== undefined && tpPrice !== null ? candleSeriesRef.current!.priceToCoordinate(tpPrice) : null;
+
+            const width = chartRect.width;
+            const isHovered = activeDrag?.positionId === pos.id || pendingMutation?.positionId === pos.id;
+
+            return (
+              <g key={pos.id}>
+                {/* 1. Take Profit Area & Line */}
+                {yTP !== null && yEntry !== null && (
+                  <g>
+                    {/* Shaded Box */}
+                    <rect
+                      x={0}
+                      y={Math.min(yEntry, yTP)}
+                      width={width}
+                      height={Math.abs(yTP - yEntry)}
+                      fill="#089981"
+                      fillOpacity={0.08}
+                      className={styles.posShadedBox}
+                    />
+                    {/* TP Line */}
+                    <line
+                      x1={0}
+                      y1={yTP}
+                      x2={width}
+                      y2={yTP}
+                      stroke="#089981"
+                      strokeWidth={1.5}
+                      strokeDasharray="4,4"
+                      className={styles.posDragLine}
+                    />
+                    {/* Thick Drag Trigger */}
+                    <line
+                      x1={0}
+                      y1={yTP}
+                      x2={width}
+                      y2={yTP}
+                      stroke="transparent"
+                      strokeWidth={12}
+                      className={styles.posLineHoverTrigger}
+                      onPointerDown={(e) => handlePointerDown(e, pos.id, 'tp', tpPrice!)}
+                    />
+                    {/* Resizing Anchor Handles */}
+                    {(isHovered || selectedPositionId === pos.id) && (
+                      <>
+                        <circle cx={100} cy={yTP} r={4} fill="#ffffff" stroke="#089981" strokeWidth={1.5} className={styles.posLineAnchor} />
+                        <circle cx={width / 2} cy={yTP} r={4} fill="#ffffff" stroke="#089981" strokeWidth={1.5} className={styles.posLineAnchor} />
+                        <circle cx={width - 100} cy={yTP} r={4} fill="#ffffff" stroke="#089981" strokeWidth={1.5} className={styles.posLineAnchor} />
+                      </>
+                    )}
+                  </g>
+                )}
+
+                {/* 2. Stop Loss Area & Line */}
+                {ySL !== null && yEntry !== null && (
+                  <g>
+                    {/* Shaded Box */}
+                    <rect
+                      x={0}
+                      y={Math.min(yEntry, ySL)}
+                      width={width}
+                      height={Math.abs(ySL - yEntry)}
+                      fill="#f23645"
+                      fillOpacity={0.08}
+                      className={styles.posShadedBox}
+                    />
+                    {/* SL Line */}
+                    <line
+                      x1={0}
+                      y1={ySL}
+                      x2={width}
+                      y2={ySL}
+                      stroke="#f23645"
+                      strokeWidth={1.5}
+                      strokeDasharray="4,4"
+                      className={styles.posDragLine}
+                    />
+                    {/* Thick Drag Trigger */}
+                    <line
+                      x1={0}
+                      y1={ySL}
+                      x2={width}
+                      y2={ySL}
+                      stroke="transparent"
+                      strokeWidth={12}
+                      className={styles.posLineHoverTrigger}
+                      onPointerDown={(e) => handlePointerDown(e, pos.id, 'sl', slPrice!)}
+                    />
+                    {/* Resizing Anchor Handles */}
+                    {(isHovered || selectedPositionId === pos.id) && (
+                      <>
+                        <circle cx={100} cy={ySL} r={4} fill="#ffffff" stroke="#f23645" strokeWidth={1.5} className={styles.posLineAnchor} />
+                        <circle cx={width / 2} cy={ySL} r={4} fill="#ffffff" stroke="#f23645" strokeWidth={1.5} className={styles.posLineAnchor} />
+                        <circle cx={width - 100} cy={ySL} r={4} fill="#ffffff" stroke="#f23645" strokeWidth={1.5} className={styles.posLineAnchor} />
+                      </>
+                    )}
+                  </g>
+                )}
+
+                {/* 3. Entry Price Line */}
+                {yEntry !== null && (
+                  <g>
+                    {/* Entry Line */}
+                    <line
+                      x1={0}
+                      y1={yEntry}
+                      x2={width}
+                      y2={yEntry}
+                      stroke="#2962ff"
+                      strokeWidth={2}
+                      className={styles.posDragLine}
+                    />
+                    {/* Thick Drag Trigger */}
+                    <line
+                      x1={0}
+                      y1={yEntry}
+                      x2={width}
+                      y2={yEntry}
+                      stroke="transparent"
+                      strokeWidth={12}
+                      className={styles.posLineHoverTrigger}
+                      onPointerDown={(e) => handlePointerDown(e, pos.id, 'entry', entryPrice)}
+                    />
+                    {/* Resizing Anchor Handles */}
+                    {(isHovered || selectedPositionId === pos.id) && (
+                      <>
+                        <circle cx={100} cy={yEntry} r={4} fill="#ffffff" stroke="#2962ff" strokeWidth={1.5} className={styles.posLineAnchor} />
+                        <circle cx={width / 2} cy={yEntry} r={4} fill="#ffffff" stroke="#2962ff" strokeWidth={1.5} className={styles.posLineAnchor} />
+                        <circle cx={width - 100} cy={yEntry} r={4} fill="#ffffff" stroke="#2962ff" strokeWidth={1.5} className={styles.posLineAnchor} />
+                      </>
+                    )}
+                  </g>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* DOM Control Pills Layer */}
+        {activePositions.map((pos) => {
+          const entryPrice = getLevelPrice(pos, 'entry') || pos.entryPrice;
+          const slPrice = getLevelPrice(pos, 'sl');
+          const tpPrice = getLevelPrice(pos, 'tp');
+
+          const yEntry = candleSeriesRef.current!.priceToCoordinate(entryPrice);
+          const ySL = slPrice !== undefined && slPrice !== null ? candleSeriesRef.current!.priceToCoordinate(slPrice) : null;
+          const yTP = tpPrice !== undefined && tpPrice !== null ? candleSeriesRef.current!.priceToCoordinate(tpPrice) : null;
+
+          const isBuy = pos.type === 'BUY';
+
+          // Anti-overlap vertical offsets
+          let tpOffset = 0;
+          let slOffset = 0;
+          if (yTP !== null && yEntry !== null && Math.abs(yTP - yEntry) < 24) {
+            tpOffset = yTP < yEntry ? -14 : 14;
+          }
+          if (ySL !== null && yEntry !== null && Math.abs(ySL - yEntry) < 24) {
+            slOffset = ySL < yEntry ? -14 : 14;
+          }
+
+          // Real-time P&L calculation
+          const currentPnL = calculatePnL(pos.entryPrice, currentMarketPrice, pos.lotSize, pos.type, _symbol);
+
+          return (
+            <div key={`pills-${pos.id}`} onClick={() => setSelectedPositionIdState(pos.id)}>
+              {/* Entry Pill */}
+              {yEntry !== null && (
+                <div
+                  className={`${styles.posControlPill} ${styles.posControlPillEntry}`}
+                  style={{ top: `${yEntry}px`, left: '50px' }}
+                >
+                  <span className={`${styles.posPillBadge} ${isBuy ? styles.posBadgeBuy : styles.posBadgeSell}`}>
+                    {pos.type} {pos.lotSize.toFixed(2)}
+                  </span>
+                  
+                  {inlineEdit && inlineEdit.positionId === pos.id && inlineEdit.type === 'entry' ? (
+                    <input
+                      type="number"
+                      step={config.pipSize.toString()}
+                      className={styles.posPillInput}
+                      value={inlineEdit.value}
+                      onChange={(e) => setInlineEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
+                      onKeyDown={(e) => handleInlineInputKeyDown(e, pos, 'entry')}
+                      onBlur={() => handleInlineInputBlur(pos, 'entry')}
+                      autoFocus
+                    />
+                  ) : (
+                    <span 
+                      className={styles.posPillValue}
+                      onDoubleClick={() => setInlineEdit({ positionId: pos.id, type: 'entry', value: entryPrice.toFixed(config.digits) })}
+                    >
+                      {entryPrice.toFixed(config.digits)}
+                    </span>
+                  )}
+
+                  <span className={styles.posPillMetric}>
+                    PnL: <span style={{ color: currentPnL >= 0 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>
+                      {currentPnL >= 0 ? '+' : ''}{formatCurrency(currentPnL)}
+                    </span>
+                  </span>
+
+                  {/* Add Brackets shortcuts */}
+                  {pos.takeProfit === null && !tpPrice && (
+                    <button className={styles.posActionButton} onClick={() => handleAddTP(pos)} title="Add Take Profit">
+                      + TP
+                    </button>
+                  )}
+                  {pos.stopLoss === null && !slPrice && (
+                    <button className={styles.posActionButton} onClick={() => handleAddSL(pos)} title="Add Stop Loss">
+                      + SL
+                    </button>
+                  )}
+
+                  {/* Confirm entry drag if pending */}
+                  {pendingMutation && pendingMutation.positionId === pos.id && pendingMutation.type === 'entry' && (
+                    <div className={styles.posPillActions}>
+                      <button 
+                        className={`${styles.posActionButton} ${styles.posActionButtonConfirm}`} 
+                        onClick={() => handleConfirmMutation(pos, 'entry', pendingMutation.price)}
+                        title="Confirm Price Modify"
+                      >
+                        ✓
+                      </button>
+                      <button 
+                        className={`${styles.posActionButton} ${styles.posActionButtonCancel}`} 
+                        onClick={handleDiscardMutation}
+                        title="Discard Modify"
+                      >
+                        ✗
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TP Pill */}
+              {yTP !== null && tpPrice !== undefined && (
+                <div
+                  className={`${styles.posControlPill} ${styles.posControlPillTP}`}
+                  style={{ top: `${yTP + tpOffset}px`, left: '260px' }}
+                >
+                  <span className={`${styles.posPillBadge} ${styles.posBadgeTP}`}>TP</span>
+                  
+                  {inlineEdit && inlineEdit.positionId === pos.id && inlineEdit.type === 'tp' ? (
+                    <input
+                      type="number"
+                      step={config.pipSize.toString()}
+                      className={styles.posPillInput}
+                      value={inlineEdit.value}
+                      onChange={(e) => setInlineEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
+                      onKeyDown={(e) => handleInlineInputKeyDown(e, pos, 'tp')}
+                      onBlur={() => handleInlineInputBlur(pos, 'tp')}
+                      autoFocus
+                    />
+                  ) : (
+                    <span 
+                      className={styles.posPillValue}
+                      onDoubleClick={() => setInlineEdit({ positionId: pos.id, type: 'tp', value: tpPrice.toFixed(config.digits) })}
+                    >
+                      {tpPrice.toFixed(config.digits)}
+                    </span>
+                  )}
+
+                  {(() => {
+                    const tpPnL = calculatePnL(pos.entryPrice, tpPrice, pos.lotSize, pos.type, _symbol);
+                    const pips = Math.abs(tpPrice - pos.entryPrice) / config.pipSize;
+                    const pct = ((tpPrice - pos.entryPrice) / pos.entryPrice) * 100 * (isBuy ? 1 : -1);
+                    return (
+                      <span className={styles.posPillMetric}>
+                        {pips.toFixed(1)} pips ({pct.toFixed(2)}%) | <span style={{ color: '#10b981', fontWeight: 600 }}>+{formatCurrency(tpPnL)}</span>
+                      </span>
+                    );
+                  })()}
+
+                  {/* Actions buttons */}
+                  {pendingMutation && pendingMutation.positionId === pos.id && pendingMutation.type === 'tp' ? (
+                    <div className={styles.posPillActions}>
+                      <button 
+                        className={`${styles.posActionButton} ${styles.posActionButtonConfirm}`} 
+                        onClick={() => handleConfirmMutation(pos, 'tp', pendingMutation.price)}
+                        title="Confirm TP"
+                      >
+                        ✓
+                      </button>
+                      <button 
+                        className={`${styles.posActionButton} ${styles.posActionButtonCancel}`} 
+                        onClick={handleDiscardMutation}
+                        title="Discard TP Change"
+                      >
+                        ✗
+                      </button>
+                    </div>
+                  ) : (
+                    <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'tp')} title="Remove Take Profit">
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* SL Pill */}
+              {ySL !== null && slPrice !== undefined && (
+                <div
+                  className={`${styles.posControlPill} ${styles.posControlPillSL}`}
+                  style={{ top: `${ySL + slOffset}px`, left: '260px' }}
+                >
+                  <span className={`${styles.posPillBadge} ${styles.posBadgeSL}`}>SL</span>
+                  
+                  {inlineEdit && inlineEdit.positionId === pos.id && inlineEdit.type === 'sl' ? (
+                    <input
+                      type="number"
+                      step={config.pipSize.toString()}
+                      className={styles.posPillInput}
+                      value={inlineEdit.value}
+                      onChange={(e) => setInlineEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
+                      onKeyDown={(e) => handleInlineInputKeyDown(e, pos, 'sl')}
+                      onBlur={() => handleInlineInputBlur(pos, 'sl')}
+                      autoFocus
+                    />
+                  ) : (
+                    <span 
+                      className={styles.posPillValue}
+                      onDoubleClick={() => setInlineEdit({ positionId: pos.id, type: 'sl', value: slPrice.toFixed(config.digits) })}
+                    >
+                      {slPrice.toFixed(config.digits)}
+                    </span>
+                  )}
+
+                  {(() => {
+                    const slPnL = calculatePnL(pos.entryPrice, slPrice, pos.lotSize, pos.type, _symbol);
+                    const pips = Math.abs(slPrice - pos.entryPrice) / config.pipSize;
+                    const pct = ((slPrice - pos.entryPrice) / pos.entryPrice) * 100 * (isBuy ? 1 : -1);
+                    return (
+                      <span className={styles.posPillMetric}>
+                        {pips.toFixed(1)} pips ({pct.toFixed(2)}%) | <span style={{ color: '#f43f5e', fontWeight: 600 }}>{formatCurrency(slPnL)}</span>
+                      </span>
+                    );
+                  })()}
+
+                  {/* Actions buttons */}
+                  {pendingMutation && pendingMutation.positionId === pos.id && pendingMutation.type === 'sl' ? (
+                    <div className={styles.posPillActions}>
+                      <button 
+                        className={`${styles.posActionButton} ${styles.posActionButtonConfirm}`} 
+                        onClick={() => handleConfirmMutation(pos, 'sl', pendingMutation.price)}
+                        title="Confirm SL"
+                      >
+                        ✓
+                      </button>
+                      <button 
+                        className={`${styles.posActionButton} ${styles.posActionButtonCancel}`} 
+                        onClick={handleDiscardMutation}
+                        title="Discard SL Change"
+                      >
+                        ✗
+                      </button>
+                    </div>
+                  ) : (
+                    <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'sl')} title="Remove Stop Loss">
+                      ✕
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div ref={wrapperRef} className={styles.chartWrapper}>
       <div ref={containerRef} className={styles.chartContainer} />
@@ -3518,6 +4123,9 @@ ${notes || 'No notes added.'}`;
           onSave={handleSaveSettings}
         />
       )}
+
+      {/* Chart-Based Position Management Tool Overlay */}
+      {showTradeLevels && renderPositionManagerOverlay()}
 
       {/* Position Tool Panel */}
       {isPositionTool && renderPositionToolPanel(selectedDrawing)}

@@ -523,3 +523,187 @@
     transform: translateY(0);
   }
 }
+
+/* ============================================================================
+   Interactive Chart-Based Position Management Tool
+   ============================================================================ */
+
+.posOverlayContainer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20000;
+  overflow: hidden;
+  user-select: none;
+}
+
+.posSvgOverlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.posDragLine {
+  cursor: ns-resize;
+  pointer-events: stroke;
+  transition: stroke-width 0.15s ease;
+}
+
+.posDragLineHovered {
+  stroke-width: 3px !important;
+}
+
+.posLineHoverTrigger {
+  cursor: ns-resize;
+  pointer-events: stroke;
+}
+
+.posShadedBox {
+  transition: fill-opacity 0.15s ease;
+}
+
+.posControlPill {
+  position: absolute;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 3px 6px;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transform: translateY(-50%);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  z-index: 20100;
+}
+
+.posControlPill:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.posControlPillEntry {
+  border-left: 3px solid #2962ff;
+}
+
+.posControlPillTP {
+  border-left: 3px solid #089981;
+}
+
+.posControlPillSL {
+  border-left: 3px solid #f23645;
+}
+
+.posPillBadge {
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 10px;
+}
+
+.posBadgeBuy {
+  background: rgba(41, 98, 255, 0.2);
+  color: #2962ff;
+}
+
+.posBadgeSell {
+  background: rgba(242, 54, 69, 0.2);
+  color: #f23645;
+}
+
+.posBadgeTP {
+  background: rgba(8, 153, 129, 0.2);
+  color: #089981;
+}
+
+.posBadgeSL {
+  background: rgba(242, 54, 69, 0.2);
+  color: #f23645;
+}
+
+.posPillMetric {
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.posPillValue {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.posPillActions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 4px;
+}
+
+.posActionButton {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 10px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+}
+
+.posActionButton:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.posActionButtonConfirm {
+  color: #089981;
+}
+
+.posActionButtonConfirm:hover {
+  background: rgba(8, 153, 129, 0.2);
+  color: #10b981;
+}
+
+.posActionButtonCancel {
+  color: #f23645;
+}
+
+.posActionButtonCancel:hover {
+  background: rgba(242, 54, 69, 0.2);
+  color: #f43f5e;
+}
+
+.posPillInput {
+  background: #0f172a;
+  border: 1px solid #3b82f6;
+  border-radius: 3px;
+  color: #ffffff;
+  width: 70px;
+  font-family: inherit;
+  font-size: 11px;
+  padding: 1px 4px;
+  outline: none;
+  font-weight: 600;
+}
+
+.posLineAnchor {
+  cursor: ns-resize;
+  pointer-events: auto;
+  transition: transform 0.12s;
+}
+
+.posLineAnchor:hover {
+  transform: scale(1.3);
+}
+

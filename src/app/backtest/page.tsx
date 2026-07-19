@@ -1742,6 +1742,21 @@ export default function BacktestPage() {
     autoSave(balance, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframe, markers);
   };
 
+  // Update active position entry price
+  const handleUpdateEntryPrice = (positionId: string, entryPrice: number) => {
+    const nextOpen = openPositions.map(p => {
+      if (p.id === positionId) {
+        return {
+          ...p,
+          entryPrice,
+        };
+      }
+      return p;
+    });
+    setOpenPositions(nextOpen);
+    autoSave(balance, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframe, markers);
+  };
+
 
   // Helper to set inputs to quick SL/TP options
   const setQuickSLTP = (pipsSL: number, pipsTP: number) => {
@@ -2994,6 +3009,8 @@ export default function BacktestPage() {
                   closedTrades={closedTrades}
                   showTradeHistory={showTradeHistory}
                   showTradeLevels={showTradeLevels}
+                  onUpdateSLTP={handleUpdateSLTP}
+                  onUpdateEntryPrice={handleUpdateEntryPrice}
                 />
 
                 {/* Fullscreen Original Panels Toggle Overlays */}
