@@ -17,8 +17,10 @@ import type {
   ISeriesApi,
   UTCTimestamp,
   MouseEventParams,
+  ISeriesPrimitive,
+  SeriesAttachedParameter,
 } from 'lightweight-charts';
-import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay } from '@/types';
+import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay, TradeRecord } from '@/types';
 import styles from './Chart.module.css';
 import { computeHeikinAshi } from '@/lib/heikin-ashi';
 import { TIMEFRAME_SECONDS } from '@/lib/aggregator';
@@ -222,6 +224,9 @@ interface ChartProps {
   onSelectTool?: (tool: string | null) => void;
   timeframe?: string;
   isZoomLocked?: boolean;
+  closedTrades?: TradeRecord[];
+  showTradeHistory?: boolean;
+  showTradeLevels?: boolean;
 }
 
 export interface ChartRef {
@@ -230,6 +235,125 @@ export interface ChartRef {
   clearDrawings: () => void;
   toggleFullscreen: () => void;
   resetZoom: () => void;
+}
+
+class TradeHistoryPrimitive implements ISeriesPrimitive<any> {
+  private _chart: any = null;
+  private _series: any = null;
+  private _requestUpdate: () => void = () => {};
+  private _trades: TradeRecord[] = [];
+  private _visible: boolean = true;
+
+  constructor(trades: TradeRecord[], visible: boolean) {
+    this._trades = trades;
+    this._visible = visible;
+  }
+
+  updateTrades(trades: TradeRecord[], visible: boolean) {
+    this._trades = trades;
+    this._visible = visible;
+    this._requestUpdate();
+  }
+
+  attached(param: any) {
+    this._chart = param.chart;
+    this._series = param.series;
+    this._requestUpdate = param.requestUpdate;
+  }
+
+  detached() {
+    this._chart = null;
+    this._series = null;
+  }
+
+  updateAllViews() {}
+
+  paneViews() {
+    return [
+      {
+        zOrder: () => 'normal' as any,
+        renderer: () => {
+          if (!this._visible || !this._chart || !this._series || this._trades.length === 0) {
+            return null;
+          }
+          return {
+            draw: (target: any) => {
+              target.useMediaCoordinateSpace((scope: any) => {
+                const ctx = scope.context;
+                for (const trade of this._trades) {
+                  const entryTime = trade.entryTime;
+                  const exitTime = trade.exitTime;
+                  if (!entryTime || !exitTime) continue;
+
+                  const xEntry = this._chart.timeScale().timeToCoordinate(entryTime as any);
+                  const xExit = this._chart.timeScale().timeToCoordinate(exitTime as any);
+                  const yEntry = this._series.priceToCoordinate(trade.entryPrice);
+                  const yExit = this._series.priceToCoordinate(trade.exitPrice);
+
+                  if (xEntry !== null && yEntry !== null && xExit !== null && yExit !== null) {
+                    const isBuy = trade.type === 'BUY';
+                    
+                    // Draw entry arrow: Up pointing arrow (Blue) for BUY entry, Down (Red) for SELL entry
+                    const entryColor = isBuy ? '#2196f3' : '#f44336';
+                    this._drawArrow(ctx, xEntry, yEntry, isBuy ? 'up' : 'down', entryColor);
+
+                    // Draw exit arrow: Down pointing arrow (Red) for BUY exit (SELL), Up (Blue) for SELL exit (BUY)
+                    const exitColor = isBuy ? '#f44336' : '#2196f3';
+                    this._drawArrow(ctx, xExit, yExit, isBuy ? 'down' : 'up', exitColor);
+
+                    // Draw dashed line connecting entry and exit
+                    ctx.save();
+                    ctx.strokeStyle = 'rgba(99, 102, 241, 0.85)'; // Premium indigo dashed line
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(xEntry, yEntry);
+                    ctx.lineTo(xExit, yExit);
+                    ctx.stroke();
+                    ctx.restore();
+                  }
+                }
+              });
+            }
+          };
+        }
+      }
+    ];
+  }
+
+  private _drawArrow(ctx: CanvasRenderingContext2D, x: number, y: number, direction: 'up' | 'down', color: string) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    
+    if (direction === 'up') {
+      // Pointing UP: tip at (x, y)
+      // Body extends downwards
+      ctx.moveTo(x, y); // tip
+      ctx.lineTo(x - 5, y + 5);
+      ctx.lineTo(x - 2, y + 5);
+      ctx.lineTo(x - 2, y + 12);
+      ctx.lineTo(x + 2, y + 12);
+      ctx.lineTo(x + 2, y + 5);
+      ctx.lineTo(x + 5, y + 5);
+    } else {
+      // Pointing DOWN: tip at (x, y)
+      // Body extends upwards
+      ctx.moveTo(x, y); // tip
+      ctx.lineTo(x + 5, y - 5);
+      ctx.lineTo(x + 2, y - 5);
+      ctx.lineTo(x + 2, y - 12);
+      ctx.lineTo(x - 2, y - 12);
+      ctx.lineTo(x - 2, y - 5);
+      ctx.lineTo(x - 5, y - 5);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 const PANEL_INDICATORS = ['RSI', 'MACD', 'ATR', 'Stochastic', 'CCI', 'OBV', 'MFI', 'ADX', 'Aroon', 'WilliamsPercentRange', 'ChaikinMF', 'Momentum', 'ROC'];
@@ -326,6 +450,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   onSelectTool,
   timeframe,
   isZoomLocked = true,
+  closedTrades = [],
+  showTradeHistory = true,
+  showTradeLevels = true,
 }: ChartProps, ref) {
   const isShiftPressedRef = useRef(false);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
@@ -344,6 +471,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const markerPrimitiveRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const lastHoveredLogicalRef = useRef<number | null>(null);
+  const tradeHistoryPrimitiveRef = useRef<TradeHistoryPrimitive | null>(null);
   // Track candle data identity: first timestamp + last timestamp + count
   const dataSignatureRef = useRef<string>('');
   const activeToolRef = useRef<string | null>(activeTool);
@@ -896,6 +1024,11 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     // Initialize markers primitive for this series
     markerPrimitiveRef.current = createSeriesMarkers(candleSeries);
+
+    // Initialize trade history custom primitive
+    const tradeHistoryPrimitive = new TradeHistoryPrimitive(closedTrades || [], showTradeHistory ?? true);
+    candleSeries.attachPrimitive(tradeHistoryPrimitive);
+    tradeHistoryPrimitiveRef.current = tradeHistoryPrimitive;
 
     // Add Volume Series (overlaid at bottom)
     const volumeSeries = chart.addSeries(HistogramSeries, {
@@ -1872,9 +2005,15 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       drawingManager.detach();
       chart.remove();
       chartRef.current = null;
+      if (tradeHistoryPrimitiveRef.current && candleSeriesRef.current) {
+        try {
+          candleSeriesRef.current.detachPrimitive(tradeHistoryPrimitiveRef.current);
+        } catch {}
+      }
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
       markerPrimitiveRef.current = null;
+      tradeHistoryPrimitiveRef.current = null;
       drawingManagerRef.current = null;
     };
   }, [onCrosshairMove, chartType]);
@@ -2244,8 +2383,16 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     // Apply markers if any
     if (markers && markers.length > 0) {
+      // Filter out trade entry/exit markers to prevent collision with custom primitive
+      const filteredMarkers = markers.filter((m) => {
+        // Keep "Replay Start" always
+        if (m.text === 'Replay Start') return true;
+        // Hide other trade history markers since they are rendered via the custom primitive
+        return false;
+      });
+
       // Ensure markers are sorted by time
-      const sortedMarkers = [...markers]
+      const sortedMarkers = [...filteredMarkers]
         .sort((a, b) => a.time - b.time)
         .map((m) => ({
           time: m.time as UTCTimestamp,
@@ -2263,7 +2410,14 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         markerPrimitiveRef.current.setMarkers([]);
       }
     }
-  }, [candles, markers, chartType, sessionKey]);
+  }, [candles, markers, chartType, sessionKey, showTradeHistory]);
+
+  // Sync Trade History Primitive
+  useEffect(() => {
+    if (tradeHistoryPrimitiveRef.current) {
+      tradeHistoryPrimitiveRef.current.updateTrades(closedTrades || [], showTradeHistory);
+    }
+  }, [closedTrades, showTradeHistory]);
 
   // Sync Technical Indicators
   useEffect(() => {
@@ -2461,6 +2615,21 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     const currentLinesMap = priceLinesRef.current;
 
+    // If showTradeLevels is false, remove all price lines and exit
+    if (!showTradeLevels) {
+      for (const [posId, lines] of currentLinesMap.entries()) {
+        try {
+          if (lines.entry) candleSeries.removePriceLine(lines.entry);
+          if (lines.sl) candleSeries.removePriceLine(lines.sl);
+          if (lines.tp) candleSeries.removePriceLine(lines.tp);
+        } catch (e) {
+          console.error('Failed to remove price line:', e);
+        }
+      }
+      currentLinesMap.clear();
+      return;
+    }
+
     // Identify position IDs that are no longer active
     const activePositionIds = new Set(positions.map((p) => p.id));
     for (const [posId, lines] of currentLinesMap.entries()) {
@@ -2535,7 +2704,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         tp: tpLine,
       });
     }
-  }, [positions]);
+  }, [positions, showTradeLevels]);
 
   const selectedDrawing = selectedDrawingId ? drawingManagerRef.current?.getDrawing(selectedDrawingId) : null;
   const isPositionTool = selectedDrawing && (selectedDrawing.type === 'long-position' || selectedDrawing.type === 'short-position');

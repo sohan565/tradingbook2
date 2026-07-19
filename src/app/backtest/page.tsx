@@ -215,6 +215,31 @@ export default function BacktestPage() {
   const [tempSL, setTempSL] = useState<string>('');
   const [tempTP, setTempTP] = useState<string>('');
 
+  // Chart Display Settings
+  const [showTradeHistory, setShowTradeHistory] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tradingbook_show_trade_history');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+  const [showTradeLevels, setShowTradeLevels] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tradingbook_show_trade_levels');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    localStorage.setItem('tradingbook_show_trade_history', String(showTradeHistory));
+  }, [showTradeHistory]);
+
+  useEffect(() => {
+    localStorage.setItem('tradingbook_show_trade_levels', String(showTradeLevels));
+  }, [showTradeLevels]);
+
   // Timer reference for playback
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const visibleCandlesRef = useRef<CandleData[]>([]);
@@ -2285,6 +2310,48 @@ export default function BacktestPage() {
             onClick={() => chartComponentRef.current?.toggleFullscreen()}
           >⛶</button>
 
+          <div style={{ position: 'relative' }}>
+            <button
+              className={styles.topBarBtn}
+              title="Chart Display Settings"
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              style={{
+                borderColor: isSettingsOpen ? 'var(--term-accent, #7c4dff)' : 'var(--term-border-strong)',
+                background: isSettingsOpen ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
+              }}
+            >
+              ⚙️ settings
+            </button>
+            
+            {isSettingsOpen && (
+              <>
+                <div 
+                  style={{ position: 'fixed', inset: 0, zIndex: 29999 }} 
+                  onClick={() => setIsSettingsOpen(false)} 
+                />
+                <div className={styles.settingsDropdown}>
+                  <div className={styles.settingsDropdownTitle}>Chart Options</div>
+                  <label className={styles.settingsDropdownItem}>
+                    <input
+                      type="checkbox"
+                      checked={showTradeHistory}
+                      onChange={(e) => setShowTradeHistory(e.target.checked)}
+                    />
+                    <span>Show Trade History</span>
+                  </label>
+                  <label className={styles.settingsDropdownItem}>
+                    <input
+                      type="checkbox"
+                      checked={showTradeLevels}
+                      onChange={(e) => setShowTradeLevels(e.target.checked)}
+                    />
+                    <span>Show Trade Levels</span>
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className={styles.topBarDivider} />
 
           {/* Equity */}
@@ -2901,6 +2968,9 @@ export default function BacktestPage() {
                   onSelectTool={setActiveTool}
                   timeframe={timeframe}
                   isZoomLocked={isZoomLocked}
+                  closedTrades={closedTrades}
+                  showTradeHistory={showTradeHistory}
+                  showTradeLevels={showTradeLevels}
                 />
 
                 {/* Fullscreen Original Panels Toggle Overlays */}

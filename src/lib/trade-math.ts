@@ -13,8 +13,8 @@ export const SYMBOLS: Record<string, SymbolConfig> = {
     name: 'XAU/USD',
     displayName: 'Gold',
     basePrice: 2350,
-    pipSize: 0.01,
-    pipValue: 1,      // $1 per pip per 1.0 lot
+    pipSize: 0.1,
+    pipValue: 10,      // $10 per pip per 1.0 lot (standard Gold contract size 100 oz)
     digits: 2,
     category: 'commodities',
   },
