@@ -57,7 +57,7 @@ import {
 } from './DrawingControls';
 
 
-// ── RECTANGLE 8-HANDLE PROTOTYPE OVERRIDES ──
+// â”€â”€ RECTANGLE 8-HANDLE PROTOTYPE OVERRIDES â”€â”€
 if (typeof window !== 'undefined') {
   const proto = (Rectangle as any).prototype;
 
@@ -485,7 +485,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   // Interactive Position Manager States
   const [activeDrag, setActiveDrag] = useState<{
     positionId: string;
-    type: 'entry' | 'sl' | 'tp';
+    type: 'sl' | 'tp';
     startY: number;
     startPrice: number;
     currentPrice: number;
@@ -493,15 +493,11 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
   const [pendingMutation, setPendingMutation] = useState<{
     positionId: string;
-    type: 'entry' | 'sl' | 'tp';
+    type: 'sl' | 'tp';
     price: number;
   } | null>(null);
 
-  const [inlineEdit, setInlineEdit] = useState<{
-    positionId: string;
-    type: 'entry' | 'sl' | 'tp';
-    value: string;
-  } | null>(null);
+  // inlineEdit state removed (entry no longer editable inline on chart)
 
   const [chartRect, setChartRect] = useState<{ width: number; height: number } | null>(null);
   const [viewportTrigger, setViewportTrigger] = useState(0);
@@ -2114,7 +2110,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       if (!position) return;
 
       let finalPrice = snappedPrice;
-      const entryPrice = activeDrag.type === 'entry' ? snappedPrice : position.entryPrice;
+      const entryPrice = position.entryPrice;
 
       if (activeDrag.type === 'tp') {
         if (position.type === 'BUY') {
@@ -2998,9 +2994,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 - **Trade Status:** ${status}
 - **Trade Duration:** ${durationBars} bars
 
-#### 🧠 Psychology Log
+#### ðŸ§  Psychology Log
 - **Emotion:** ${psychology.emotion}
-- **Confidence:** ${'★'.repeat(psychology.confidence)}${'☆'.repeat(5 - psychology.confidence)}
+- **Confidence:** ${'â˜…'.repeat(psychology.confidence)}${'â˜†'.repeat(5 - psychology.confidence)}
 - **Rule Followed:** ${psychology.ruleFollowed ? 'Yes' : 'No'}
 - **FOMO:** ${psychology.fomo ? 'Yes' : 'No'}
 - **Revenge Trade:** ${psychology.revengeTrade ? 'Yes' : 'No'}
@@ -3009,10 +3005,10 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 ${mistakesList ? `\n- **Mistakes Made:**\n${mistakesList}` : ''}
 ${psychology.lessons ? `\n- **Lessons Learned:**\n${psychology.lessons}` : ''}
 
-#### 🎯 Confirmation Checklist
+#### ðŸŽ¯ Confirmation Checklist
 ${listItems || '  - None selected'}
 
-#### 📝 Notes
+#### ðŸ“ Notes
 ${notes || 'No notes added.'}`;
 
       navigator.clipboard.writeText(template);
@@ -3027,14 +3023,14 @@ ${notes || 'No notes added.'}`;
             onClick={() => setIsPanelMinimized(false)}
             title="Expand Position Panel"
           >
-            📊
+            ðŸ“Š
           </button>
         ) : (
           <>
             {/* Panel Header */}
             <div className={styles.positionPanelHeader}>
               <div className={styles.panelTitle}>
-                <span>{isLong ? '🟢 Long Position' : '🔴 Short Position'}</span>
+                <span>{isLong ? 'ðŸŸ¢ Long Position' : 'ðŸ”´ Short Position'}</span>
                 <span className={styles.smallId}>#{drawing.id.substring(0, 6)}</span>
               </div>
               <div className={styles.headerActions}>
@@ -3043,7 +3039,7 @@ ${notes || 'No notes added.'}`;
                   onClick={() => setIsPanelMinimized(true)}
                   title="Minimize"
                 >
-                  ➖
+                  âž–
                 </button>
                 <button 
                   className={styles.closeBtn} 
@@ -3054,7 +3050,7 @@ ${notes || 'No notes added.'}`;
                   }}
                   title="Close Panel"
                 >
-                  ✖
+                  âœ–
                 </button>
               </div>
             </div>
@@ -3065,25 +3061,25 @@ ${notes || 'No notes added.'}`;
                 className={`${styles.tabBtn} ${activePanelTab === 'stats' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('stats')}
               >
-                📊 Size & Stats
+                ðŸ“Š Size & Stats
               </button>
               <button 
                 className={`${styles.tabBtn} ${activePanelTab === 'targets' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('targets')}
               >
-                🎯 Targets
+                ðŸŽ¯ Targets
               </button>
               <button 
                 className={`${styles.tabBtn} ${activePanelTab === 'journal' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('journal')}
               >
-                📓 Journal
+                ðŸ““ Journal
               </button>
               <button 
                 className={`${styles.tabBtn} ${activePanelTab === 'appearance' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('appearance')}
               >
-                🎨 Style
+                ðŸŽ¨ Style
               </button>
             </div>
 
@@ -3383,11 +3379,11 @@ ${notes || 'No notes added.'}`;
                           value={psychology.confidence}
                           onChange={(e) => handleUpdatePsychology('confidence', parseInt(e.target.value))}
                         >
-                          <option value="1">⭐</option>
-                          <option value="2">⭐⭐</option>
-                          <option value="3">⭐⭐⭐</option>
-                          <option value="4">⭐⭐⭐⭐</option>
-                          <option value="5">⭐⭐⭐⭐⭐</option>
+                          <option value="1">â­</option>
+                          <option value="2">â­â­</option>
+                          <option value="3">â­â­â­</option>
+                          <option value="4">â­â­â­â­</option>
+                          <option value="5">â­â­â­â­â­</option>
                         </select>
                       </div>
                     </div>
@@ -3539,7 +3535,7 @@ ${notes || 'No notes added.'}`;
                       Copy a beautifully-formatted markdown summary of this trade to paste directly into your journal sheet.
                     </p>
                     <button className={styles.actionBtn} onClick={copyJournalTemplate}>
-                      📋 Copy Markdown Journal
+                      ðŸ“‹ Copy Markdown Journal
                     </button>
                   </div>
                 </>
@@ -3552,22 +3548,20 @@ ${notes || 'No notes added.'}`;
   };
 
   // Position Management Tool Helpers & Renderers
-  const [selectedPositionId, setSelectedPositionIdState] = useState<string | null>(null);
 
-  const getLevelPrice = (position: OpenPosition, type: 'entry' | 'sl' | 'tp') => {
+  const getLevelPrice = (position: OpenPosition, type: 'sl' | 'tp') => {
     if (activeDrag && activeDrag.positionId === position.id && activeDrag.type === type) {
       return activeDrag.currentPrice;
     }
     if (pendingMutation && pendingMutation.positionId === position.id && pendingMutation.type === type) {
       return pendingMutation.price;
     }
-    if (type === 'entry') return position.entryPrice;
     if (type === 'sl') return position.stopLoss;
     if (type === 'tp') return position.takeProfit;
     return undefined;
   };
 
-  const handlePointerDown = (e: React.PointerEvent, positionId: string, type: 'entry' | 'sl' | 'tp', currentPrice: number) => {
+  const handleLinePointerDown = (e: React.PointerEvent, positionId: string, type: 'sl' | 'tp', currentPrice: number) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -3582,24 +3576,18 @@ ${notes || 'No notes added.'}`;
       currentPrice: currentPrice,
     });
 
-    // Disable scale/scroll
+    // Disable chart scale/scroll while dragging
     chartRef.current?.applyOptions({
       handleScroll: false,
       handleScale: false,
     });
   };
 
-  const handleConfirmMutation = (pos: OpenPosition, type: 'entry' | 'sl' | 'tp', price: number) => {
-    if (type === 'entry') {
-      if (onUpdateEntryPrice) {
-        onUpdateEntryPrice(pos.id, price);
-      }
-    } else if (type === 'sl') {
-      if (onUpdateSLTP) {
+  const handleConfirmMutation = (pos: OpenPosition, type: 'sl' | 'tp', price: number) => {
+    if (onUpdateSLTP) {
+      if (type === 'sl') {
         onUpdateSLTP(pos.id, price, pos.takeProfit);
-      }
-    } else if (type === 'tp') {
-      if (onUpdateSLTP) {
+      } else {
         onUpdateSLTP(pos.id, pos.stopLoss, price);
       }
     }
@@ -3615,12 +3603,8 @@ ${notes || 'No notes added.'}`;
     const defaultTP = position.type === 'BUY'
       ? position.entryPrice + 50 * config.pipSize
       : position.entryPrice - 50 * config.pipSize;
-    
-    setPendingMutation({
-      positionId: position.id,
-      type: 'tp',
-      price: parseFloat(defaultTP.toFixed(config.digits)),
-    });
+    const price = parseFloat(defaultTP.toFixed(config.digits));
+    if (onUpdateSLTP) onUpdateSLTP(position.id, position.stopLoss, price);
   };
 
   const handleAddSL = (position: OpenPosition) => {
@@ -3628,64 +3612,28 @@ ${notes || 'No notes added.'}`;
     const defaultSL = position.type === 'BUY'
       ? position.entryPrice - 30 * config.pipSize
       : position.entryPrice + 30 * config.pipSize;
-    
-    setPendingMutation({
-      positionId: position.id,
-      type: 'sl',
-      price: parseFloat(defaultSL.toFixed(config.digits)),
-    });
+    const price = parseFloat(defaultSL.toFixed(config.digits));
+    if (onUpdateSLTP) onUpdateSLTP(position.id, price, position.takeProfit);
   };
 
   const handleRemoveLevel = (pos: OpenPosition, type: 'sl' | 'tp') => {
-    if (type === 'sl') {
-      if (onUpdateSLTP) {
-        onUpdateSLTP(pos.id, undefined, pos.takeProfit);
-      }
-    } else if (type === 'tp') {
-      if (onUpdateSLTP) {
-        onUpdateSLTP(pos.id, pos.stopLoss, undefined);
-      }
+    if (onUpdateSLTP) {
+      if (type === 'sl') onUpdateSLTP(pos.id, undefined, pos.takeProfit);
+      else onUpdateSLTP(pos.id, pos.stopLoss, undefined);
     }
   };
 
-  const handleInlineInputKeyDown = (e: React.KeyboardEvent, pos: OpenPosition, type: 'entry' | 'sl' | 'tp') => {
-    if (e.key === 'Enter') {
-      const parsed = parseFloat(inlineEdit?.value || '');
-      if (!isNaN(parsed)) {
-        handleConfirmMutation(pos, type, parsed);
-      }
-      setInlineEdit(null);
-    } else if (e.key === 'Escape') {
-      setInlineEdit(null);
-    }
-  };
-
-  const handleInlineInputBlur = (pos: OpenPosition, type: 'entry' | 'sl' | 'tp') => {
-    const parsed = parseFloat(inlineEdit?.value || '');
-    if (!isNaN(parsed)) {
-      handleConfirmMutation(pos, type, parsed);
-    }
-    setInlineEdit(null);
-  };
-
-  // Esc listener effect for pending mutations
+  // Esc listener for pending mutations
   useEffect(() => {
     const handleEscKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (inlineEdit) {
-          setInlineEdit(null);
-          e.preventDefault();
-        } else if (pendingMutation) {
-          setPendingMutation(null);
-          e.preventDefault();
-        }
+      if (e.key === 'Escape' && pendingMutation) {
+        setPendingMutation(null);
+        e.preventDefault();
       }
     };
     window.addEventListener('keydown', handleEscKey);
-    return () => {
-      window.removeEventListener('keydown', handleEscKey);
-    };
-  }, [inlineEdit, pendingMutation]);
+    return () => window.removeEventListener('keydown', handleEscKey);
+  }, [pendingMutation]);
 
   const renderPositionManagerOverlay = () => {
     const activePositions = positions || [];
@@ -3695,380 +3643,160 @@ ${notes || 'No notes added.'}`;
 
     const currentMarketPrice = candles.length > 0 ? candles[candles.length - 1].close : 0;
     const config = getSymbolConfig(_symbol);
+    const pillRight = 70; // leave room for price axis
 
     return (
       <div className={styles.posOverlayContainer}>
-        {/* SVG Drawing Layer */}
+        {/* SVG lines and shaded areas */}
         <svg className={styles.posSvgOverlay} width={chartRect.width} height={chartRect.height}>
           {activePositions.map((pos) => {
-            const entryPrice = getLevelPrice(pos, 'entry') || pos.entryPrice;
             const slPrice = getLevelPrice(pos, 'sl');
             const tpPrice = getLevelPrice(pos, 'tp');
-
-            const yEntry = candleSeriesRef.current!.priceToCoordinate(entryPrice);
-            const ySL = slPrice !== undefined && slPrice !== null ? candleSeriesRef.current!.priceToCoordinate(slPrice) : null;
-            const yTP = tpPrice !== undefined && tpPrice !== null ? candleSeriesRef.current!.priceToCoordinate(tpPrice) : null;
-
-            const width = chartRect.width;
-            const isHovered = activeDrag?.positionId === pos.id || pendingMutation?.positionId === pos.id;
+            const yEntry = candleSeriesRef.current!.priceToCoordinate(pos.entryPrice);
+            const ySL = slPrice != null ? candleSeriesRef.current!.priceToCoordinate(slPrice) : null;
+            const yTP = tpPrice != null ? candleSeriesRef.current!.priceToCoordinate(tpPrice) : null;
+            const w = chartRect.width;
 
             return (
               <g key={pos.id}>
-                {/* 1. Take Profit Area & Line */}
+                {/* TP shaded area + dashed line + drag trigger */}
                 {yTP !== null && yEntry !== null && (
                   <g>
-                    {/* Shaded Box */}
-                    <rect
-                      x={0}
-                      y={Math.min(yEntry, yTP)}
-                      width={width}
-                      height={Math.abs(yTP - yEntry)}
-                      fill="#089981"
-                      fillOpacity={0.08}
-                      className={styles.posShadedBox}
-                    />
-                    {/* TP Line */}
-                    <line
-                      x1={0}
-                      y1={yTP}
-                      x2={width}
-                      y2={yTP}
-                      stroke="#089981"
-                      strokeWidth={1.5}
-                      strokeDasharray="4,4"
-                      className={styles.posDragLine}
-                    />
-                    {/* Thick Drag Trigger */}
-                    <line
-                      x1={0}
-                      y1={yTP}
-                      x2={width}
-                      y2={yTP}
-                      stroke="transparent"
-                      strokeWidth={12}
+                    <rect x={0} y={Math.min(yEntry, yTP)} width={w} height={Math.abs(yTP - yEntry)}
+                      fill="#089981" fillOpacity={0.06} />
+                    <line x1={0} y1={yTP} x2={w} y2={yTP}
+                      stroke="#089981" strokeWidth={1.5} strokeDasharray="6,3" />
+                    <line x1={0} y1={yTP} x2={w} y2={yTP}
+                      stroke="transparent" strokeWidth={14}
                       className={styles.posLineHoverTrigger}
-                      onPointerDown={(e) => handlePointerDown(e, pos.id, 'tp', tpPrice!)}
-                    />
-                    {/* Resizing Anchor Handles */}
-                    {(isHovered || selectedPositionId === pos.id) && (
-                      <>
-                        <circle cx={100} cy={yTP} r={4} fill="#ffffff" stroke="#089981" strokeWidth={1.5} className={styles.posLineAnchor} />
-                        <circle cx={width / 2} cy={yTP} r={4} fill="#ffffff" stroke="#089981" strokeWidth={1.5} className={styles.posLineAnchor} />
-                        <circle cx={width - 100} cy={yTP} r={4} fill="#ffffff" stroke="#089981" strokeWidth={1.5} className={styles.posLineAnchor} />
-                      </>
-                    )}
+                      onPointerDown={(e) => handleLinePointerDown(e, pos.id, 'tp', tpPrice!)} />
                   </g>
                 )}
 
-                {/* 2. Stop Loss Area & Line */}
+                {/* SL shaded area + dashed line + drag trigger */}
                 {ySL !== null && yEntry !== null && (
                   <g>
-                    {/* Shaded Box */}
-                    <rect
-                      x={0}
-                      y={Math.min(yEntry, ySL)}
-                      width={width}
-                      height={Math.abs(ySL - yEntry)}
-                      fill="#f23645"
-                      fillOpacity={0.08}
-                      className={styles.posShadedBox}
-                    />
-                    {/* SL Line */}
-                    <line
-                      x1={0}
-                      y1={ySL}
-                      x2={width}
-                      y2={ySL}
-                      stroke="#f23645"
-                      strokeWidth={1.5}
-                      strokeDasharray="4,4"
-                      className={styles.posDragLine}
-                    />
-                    {/* Thick Drag Trigger */}
-                    <line
-                      x1={0}
-                      y1={ySL}
-                      x2={width}
-                      y2={ySL}
-                      stroke="transparent"
-                      strokeWidth={12}
+                    <rect x={0} y={Math.min(yEntry, ySL)} width={w} height={Math.abs(ySL - yEntry)}
+                      fill="#f23645" fillOpacity={0.06} />
+                    <line x1={0} y1={ySL} x2={w} y2={ySL}
+                      stroke="#f23645" strokeWidth={1.5} strokeDasharray="6,3" />
+                    <line x1={0} y1={ySL} x2={w} y2={ySL}
+                      stroke="transparent" strokeWidth={14}
                       className={styles.posLineHoverTrigger}
-                      onPointerDown={(e) => handlePointerDown(e, pos.id, 'sl', slPrice!)}
-                    />
-                    {/* Resizing Anchor Handles */}
-                    {(isHovered || selectedPositionId === pos.id) && (
-                      <>
-                        <circle cx={100} cy={ySL} r={4} fill="#ffffff" stroke="#f23645" strokeWidth={1.5} className={styles.posLineAnchor} />
-                        <circle cx={width / 2} cy={ySL} r={4} fill="#ffffff" stroke="#f23645" strokeWidth={1.5} className={styles.posLineAnchor} />
-                        <circle cx={width - 100} cy={ySL} r={4} fill="#ffffff" stroke="#f23645" strokeWidth={1.5} className={styles.posLineAnchor} />
-                      </>
-                    )}
+                      onPointerDown={(e) => handleLinePointerDown(e, pos.id, 'sl', slPrice!)} />
                   </g>
                 )}
 
-                {/* 3. Entry Price Line */}
+                {/* Entry line â€” solid blue, NOT draggable */}
                 {yEntry !== null && (
-                  <g>
-                    {/* Entry Line */}
-                    <line
-                      x1={0}
-                      y1={yEntry}
-                      x2={width}
-                      y2={yEntry}
-                      stroke="#2962ff"
-                      strokeWidth={2}
-                      className={styles.posDragLine}
-                    />
-                    {/* Thick Drag Trigger */}
-                    <line
-                      x1={0}
-                      y1={yEntry}
-                      x2={width}
-                      y2={yEntry}
-                      stroke="transparent"
-                      strokeWidth={12}
-                      className={styles.posLineHoverTrigger}
-                      onPointerDown={(e) => handlePointerDown(e, pos.id, 'entry', entryPrice)}
-                    />
-                    {/* Resizing Anchor Handles */}
-                    {(isHovered || selectedPositionId === pos.id) && (
-                      <>
-                        <circle cx={100} cy={yEntry} r={4} fill="#ffffff" stroke="#2962ff" strokeWidth={1.5} className={styles.posLineAnchor} />
-                        <circle cx={width / 2} cy={yEntry} r={4} fill="#ffffff" stroke="#2962ff" strokeWidth={1.5} className={styles.posLineAnchor} />
-                        <circle cx={width - 100} cy={yEntry} r={4} fill="#ffffff" stroke="#2962ff" strokeWidth={1.5} className={styles.posLineAnchor} />
-                      </>
-                    )}
-                  </g>
+                  <line x1={0} y1={yEntry} x2={w} y2={yEntry}
+                    stroke="#2962ff" strokeWidth={2} />
                 )}
               </g>
             );
           })}
         </svg>
 
-        {/* DOM Control Pills Layer */}
+        {/* DOM Control Pills */}
         {activePositions.map((pos) => {
-          const entryPrice = getLevelPrice(pos, 'entry') || pos.entryPrice;
           const slPrice = getLevelPrice(pos, 'sl');
           const tpPrice = getLevelPrice(pos, 'tp');
-
-          const yEntry = candleSeriesRef.current!.priceToCoordinate(entryPrice);
-          const ySL = slPrice !== undefined && slPrice !== null ? candleSeriesRef.current!.priceToCoordinate(slPrice) : null;
-          const yTP = tpPrice !== undefined && tpPrice !== null ? candleSeriesRef.current!.priceToCoordinate(tpPrice) : null;
-
+          const yEntry = candleSeriesRef.current!.priceToCoordinate(pos.entryPrice);
+          const ySL = slPrice != null ? candleSeriesRef.current!.priceToCoordinate(slPrice) : null;
+          const yTP = tpPrice != null ? candleSeriesRef.current!.priceToCoordinate(tpPrice) : null;
           const isBuy = pos.type === 'BUY';
-
-          // Anti-overlap vertical offsets
-          let tpOffset = 0;
-          let slOffset = 0;
-          if (yTP !== null && yEntry !== null && Math.abs(yTP - yEntry) < 24) {
-            tpOffset = yTP < yEntry ? -14 : 14;
-          }
-          if (ySL !== null && yEntry !== null && Math.abs(ySL - yEntry) < 24) {
-            slOffset = ySL < yEntry ? -14 : 14;
-          }
-
-          // Real-time P&L calculation
           const currentPnL = calculatePnL(pos.entryPrice, currentMarketPrice, pos.lotSize, pos.type, _symbol);
 
           return (
-            <div key={`pills-${pos.id}`} onClick={() => setSelectedPositionIdState(pos.id)}>
-              {/* Entry Pill */}
+            <div key={`pills-${pos.id}`}>
+              {/* â•â•â• ENTRY PILL â•â•â• */}
               {yEntry !== null && (
                 <div
                   className={`${styles.posControlPill} ${styles.posControlPillEntry}`}
-                  style={{ top: `${yEntry}px`, left: '50px' }}
+                  style={{ top: `${yEntry}px`, right: `${pillRight}px`, left: 'auto' }}
                 >
-                  <span className={`${styles.posPillBadge} ${isBuy ? styles.posBadgeBuy : styles.posBadgeSell}`}>
-                    {pos.type} {pos.lotSize.toFixed(2)}
-                  </span>
-                  
-                  {inlineEdit && inlineEdit.positionId === pos.id && inlineEdit.type === 'entry' ? (
-                    <input
-                      type="number"
-                      step={config.pipSize.toString()}
-                      className={styles.posPillInput}
-                      value={inlineEdit.value}
-                      onChange={(e) => setInlineEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
-                      onKeyDown={(e) => handleInlineInputKeyDown(e, pos, 'entry')}
-                      onBlur={() => handleInlineInputBlur(pos, 'entry')}
-                      autoFocus
-                    />
-                  ) : (
-                    <span 
-                      className={styles.posPillValue}
-                      onDoubleClick={() => setInlineEdit({ positionId: pos.id, type: 'entry', value: entryPrice.toFixed(config.digits) })}
-                    >
-                      {entryPrice.toFixed(config.digits)}
-                    </span>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>{pos.lotSize.toFixed(2)}</span>
+
+                  {pos.takeProfit == null && (
+                    <button className={styles.posActionButton}
+                      onClick={() => handleAddTP(pos)}
+                      style={{ color: '#089981', fontWeight: 700 }} title="Add TP">TP</button>
+                  )}
+                  {pos.stopLoss == null && (
+                    <button className={styles.posActionButton}
+                      onClick={() => handleAddSL(pos)}
+                      style={{ color: '#f23645', fontWeight: 700 }} title="Add SL">SL</button>
                   )}
 
-                  <span className={styles.posPillMetric}>
-                    PnL: <span style={{ color: currentPnL >= 0 ? '#10b981' : '#f43f5e', fontWeight: 600 }}>
-                      {currentPnL >= 0 ? '+' : ''}{formatCurrency(currentPnL)}
-                    </span>
+                  <span className={styles.posPillBadge}
+                    style={{ background: isBuy ? '#2962ff' : '#f23645', color: '#fff', padding: '1px 6px' }}>
+                    â—€â–¶ {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
                   </span>
 
-                  {/* Add Brackets shortcuts */}
-                  {pos.takeProfit === null && !tpPrice && (
-                    <button className={styles.posActionButton} onClick={() => handleAddTP(pos)} title="Add Take Profit">
-                      + TP
-                    </button>
-                  )}
-                  {pos.stopLoss === null && !slPrice && (
-                    <button className={styles.posActionButton} onClick={() => handleAddSL(pos)} title="Add Stop Loss">
-                      + SL
-                    </button>
-                  )}
+                  <span style={{ color: currentPnL >= 0 ? '#10b981' : '#f43f5e', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' }}>
+                    {currentPnL >= 0 ? '+' : ''}{formatCurrency(currentPnL)}
+                  </span>
 
-                  {/* Confirm entry drag if pending */}
-                  {pendingMutation && pendingMutation.positionId === pos.id && pendingMutation.type === 'entry' && (
-                    <div className={styles.posPillActions}>
-                      <button 
-                        className={`${styles.posActionButton} ${styles.posActionButtonConfirm}`} 
-                        onClick={() => handleConfirmMutation(pos, 'entry', pendingMutation.price)}
-                        title="Confirm Price Modify"
-                      >
-                        ✓
-                      </button>
-                      <button 
-                        className={`${styles.posActionButton} ${styles.posActionButtonCancel}`} 
-                        onClick={handleDiscardMutation}
-                        title="Discard Modify"
-                      >
-                        ✗
-                      </button>
-                    </div>
-                  )}
+                  <button className={styles.posActionButton}
+                    style={{ color: '#94a3b8', fontSize: '12px' }} title="Close position">âœ•</button>
                 </div>
               )}
 
-              {/* TP Pill */}
-              {yTP !== null && tpPrice !== undefined && (
+              {/* â•â•â• TP PILL â•â•â• */}
+              {yTP !== null && tpPrice != null && (
                 <div
                   className={`${styles.posControlPill} ${styles.posControlPillTP}`}
-                  style={{ top: `${yTP + tpOffset}px`, left: '260px' }}
+                  style={{ top: `${yTP}px`, right: `${pillRight}px`, left: 'auto' }}
                 >
-                  <span className={`${styles.posPillBadge} ${styles.posBadgeTP}`}>TP</span>
-                  
-                  {inlineEdit && inlineEdit.positionId === pos.id && inlineEdit.type === 'tp' ? (
-                    <input
-                      type="number"
-                      step={config.pipSize.toString()}
-                      className={styles.posPillInput}
-                      value={inlineEdit.value}
-                      onChange={(e) => setInlineEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
-                      onKeyDown={(e) => handleInlineInputKeyDown(e, pos, 'tp')}
-                      onBlur={() => handleInlineInputBlur(pos, 'tp')}
-                      autoFocus
-                    />
-                  ) : (
-                    <span 
-                      className={styles.posPillValue}
-                      onDoubleClick={() => setInlineEdit({ positionId: pos.id, type: 'tp', value: tpPrice.toFixed(config.digits) })}
-                    >
-                      {tpPrice.toFixed(config.digits)}
-                    </span>
-                  )}
-
-                  {(() => {
-                    const tpPnL = calculatePnL(pos.entryPrice, tpPrice, pos.lotSize, pos.type, _symbol);
-                    const pips = Math.abs(tpPrice - pos.entryPrice) / config.pipSize;
-                    const pct = ((tpPrice - pos.entryPrice) / pos.entryPrice) * 100 * (isBuy ? 1 : -1);
-                    return (
-                      <span className={styles.posPillMetric}>
-                        {pips.toFixed(1)} pips ({pct.toFixed(2)}%) | <span style={{ color: '#10b981', fontWeight: 600 }}>+{formatCurrency(tpPnL)}</span>
-                      </span>
-                    );
-                  })()}
-
-                  {/* Actions buttons */}
                   {pendingMutation && pendingMutation.positionId === pos.id && pendingMutation.type === 'tp' ? (
-                    <div className={styles.posPillActions}>
-                      <button 
-                        className={`${styles.posActionButton} ${styles.posActionButtonConfirm}`} 
-                        onClick={() => handleConfirmMutation(pos, 'tp', pendingMutation.price)}
-                        title="Confirm TP"
-                      >
-                        ✓
-                      </button>
-                      <button 
-                        className={`${styles.posActionButton} ${styles.posActionButtonCancel}`} 
-                        onClick={handleDiscardMutation}
-                        title="Discard TP Change"
-                      >
-                        ✗
-                      </button>
-                    </div>
-                  ) : (
-                    <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'tp')} title="Remove Take Profit">
-                      ✕
-                    </button>
-                  )}
+                    <>
+                      <button className={styles.posActionButton} onClick={handleDiscardMutation}
+                        style={{ color: '#94a3b8', fontSize: '10px' }}>Discard</button>
+                      <button className={styles.posActionButton} onClick={() => handleConfirmMutation(pos, 'tp', pendingMutation.price)}
+                        style={{ background: '#089981', color: '#fff', padding: '2px 10px', borderRadius: '4px', fontWeight: 700, fontSize: '11px', border: 'none' }}>Confirm</button>
+                    </>
+                  ) : null}
+
+                  <span className={styles.posPillBadge}
+                    style={{ background: '#089981', color: '#fff', padding: '1px 6px' }}>
+                    â—€â–¶ {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
+                  </span>
+
+                  <span style={{ color: '#10b981', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' }}>
+                    +{formatCurrency(calculatePnL(pos.entryPrice, tpPrice, pos.lotSize, pos.type, _symbol))}
+                  </span>
+
+                  <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'tp')}
+                    style={{ color: '#f23645', fontSize: '12px' }} title="Remove TP">âœ•</button>
                 </div>
               )}
 
-              {/* SL Pill */}
-              {ySL !== null && slPrice !== undefined && (
+              {/* â•â•â• SL PILL â•â•â• */}
+              {ySL !== null && slPrice != null && (
                 <div
                   className={`${styles.posControlPill} ${styles.posControlPillSL}`}
-                  style={{ top: `${ySL + slOffset}px`, left: '260px' }}
+                  style={{ top: `${ySL}px`, right: `${pillRight}px`, left: 'auto' }}
                 >
-                  <span className={`${styles.posPillBadge} ${styles.posBadgeSL}`}>SL</span>
-                  
-                  {inlineEdit && inlineEdit.positionId === pos.id && inlineEdit.type === 'sl' ? (
-                    <input
-                      type="number"
-                      step={config.pipSize.toString()}
-                      className={styles.posPillInput}
-                      value={inlineEdit.value}
-                      onChange={(e) => setInlineEdit(prev => prev ? { ...prev, value: e.target.value } : null)}
-                      onKeyDown={(e) => handleInlineInputKeyDown(e, pos, 'sl')}
-                      onBlur={() => handleInlineInputBlur(pos, 'sl')}
-                      autoFocus
-                    />
-                  ) : (
-                    <span 
-                      className={styles.posPillValue}
-                      onDoubleClick={() => setInlineEdit({ positionId: pos.id, type: 'sl', value: slPrice.toFixed(config.digits) })}
-                    >
-                      {slPrice.toFixed(config.digits)}
-                    </span>
-                  )}
-
-                  {(() => {
-                    const slPnL = calculatePnL(pos.entryPrice, slPrice, pos.lotSize, pos.type, _symbol);
-                    const pips = Math.abs(slPrice - pos.entryPrice) / config.pipSize;
-                    const pct = ((slPrice - pos.entryPrice) / pos.entryPrice) * 100 * (isBuy ? 1 : -1);
-                    return (
-                      <span className={styles.posPillMetric}>
-                        {pips.toFixed(1)} pips ({pct.toFixed(2)}%) | <span style={{ color: '#f43f5e', fontWeight: 600 }}>{formatCurrency(slPnL)}</span>
-                      </span>
-                    );
-                  })()}
-
-                  {/* Actions buttons */}
                   {pendingMutation && pendingMutation.positionId === pos.id && pendingMutation.type === 'sl' ? (
-                    <div className={styles.posPillActions}>
-                      <button 
-                        className={`${styles.posActionButton} ${styles.posActionButtonConfirm}`} 
-                        onClick={() => handleConfirmMutation(pos, 'sl', pendingMutation.price)}
-                        title="Confirm SL"
-                      >
-                        ✓
-                      </button>
-                      <button 
-                        className={`${styles.posActionButton} ${styles.posActionButtonCancel}`} 
-                        onClick={handleDiscardMutation}
-                        title="Discard SL Change"
-                      >
-                        ✗
-                      </button>
-                    </div>
-                  ) : (
-                    <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'sl')} title="Remove Stop Loss">
-                      ✕
-                    </button>
-                  )}
+                    <>
+                      <button className={styles.posActionButton} onClick={handleDiscardMutation}
+                        style={{ color: '#94a3b8', fontSize: '10px' }}>Discard</button>
+                      <button className={styles.posActionButton} onClick={() => handleConfirmMutation(pos, 'sl', pendingMutation.price)}
+                        style={{ background: '#089981', color: '#fff', padding: '2px 10px', borderRadius: '4px', fontWeight: 700, fontSize: '11px', border: 'none' }}>Confirm</button>
+                    </>
+                  ) : null}
+
+                  <span className={styles.posPillBadge}
+                    style={{ background: '#f23645', color: '#fff', padding: '1px 6px' }}>
+                    â—€â–¶ {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
+                  </span>
+
+                  <span style={{ color: '#f43f5e', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' }}>
+                    {formatCurrency(calculatePnL(pos.entryPrice, slPrice, pos.lotSize, pos.type, _symbol))}
+                  </span>
+
+                  <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'sl')}
+                    style={{ color: '#f23645', fontSize: '12px' }} title="Remove SL">âœ•</button>
                 </div>
               )}
             </div>

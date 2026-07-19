@@ -2795,7 +2795,8 @@ export default function BacktestPage() {
                         ) : (
                           <span
                             className={styles.editableField}
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditingSLId(pos.id);
                               setEditingTPId(null);
                               setTempSL(pos.stopLoss ? pos.stopLoss.toString() : '');
@@ -2835,7 +2836,8 @@ export default function BacktestPage() {
                         ) : (
                           <span
                             className={styles.editableField}
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setEditingTPId(pos.id);
                               setEditingSLId(null);
                               setTempTP(pos.takeProfit ? pos.takeProfit.toString() : '');
@@ -3216,7 +3218,8 @@ export default function BacktestPage() {
                           ) : (
                             <span
                               className={styles.editableField}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setEditingSLId(pos.id);
                                 setEditingTPId(null);
                                 setTempSL(pos.stopLoss ? pos.stopLoss.toString() : '');
@@ -3255,7 +3258,8 @@ export default function BacktestPage() {
                           ) : (
                             <span
                               className={styles.editableField}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setEditingTPId(pos.id);
                                 setEditingSLId(null);
                                 setTempTP(pos.takeProfit ? pos.takeProfit.toString() : '');
