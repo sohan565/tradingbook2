@@ -2,8 +2,13 @@
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import styles from './page.module.css';
+
+const CoachTab = dynamic(() => import('./CoachTab'), { ssr: false });
 
 interface TradeEntry {
   id: string;
@@ -77,6 +82,7 @@ const EMOTIONS_OPTIONS = [
 
 export default function RecordWorkspacePage() {
   const { id } = useParams() as { id: string };
+  const confirm = useConfirm();
   const router = useRouter();
   const [record, setRecord] = useState<RecordData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -105,13 +111,6 @@ export default function RecordWorkspacePage() {
 
   // Trade review loading states
   const [analyzingTradeId, setAnalyzingTradeId] = useState<string | null>(null);
-
-  // AI Coach Chat State
-  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([
-    { role: 'assistant', content: 'Welcome to your AI Trading Coach. Ask me anything about your trades, mistakes, setups, or sessions in this project!' }
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [coachLoading, setCoachLoading] = useState(false);
 
   // Form Fields
   const [formTradeName, setFormTradeName] = useState('');
@@ -152,9 +151,12 @@ export default function RecordWorkspacePage() {
 
   // Load API key from local storage on mount
   useEffect(() => {
-    const key = localStorage.getItem('google_ai_pro_key') || '';
-    setApiKey(key);
-    setIsApiKeySet(!!key);
+    const timer = setTimeout(() => {
+      const key = localStorage.getItem('google_ai_pro_key') || '';
+      setApiKey(key);
+      setIsApiKeySet(!!key);
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   const fetchRecord = useCallback(async () => {
@@ -172,15 +174,17 @@ export default function RecordWorkspacePage() {
   }, [id]);
 
   useEffect(() => {
-    if (id) {
-      fetchRecord();
-    }
+    if (!id) return;
+    const timer = setTimeout(() => {
+      void fetchRecord();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [id, fetchRecord]);
 
   const handleSaveApiKey = () => {
     localStorage.setItem('google_ai_pro_key', apiKey.trim());
     setIsApiKeySet(!!apiKey.trim());
-    alert('Google AI Pro API Key saved successfully to local storage.');
+    toast.success('Google AI Pro API Key saved to local storage.');
   };
 
   const handleUpdateRecordSettings = async (e: React.FormEvent) => {
@@ -195,7 +199,7 @@ export default function RecordWorkspacePage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Settings updated successfully.');
+        toast.success('Settings updated successfully.');
       }
     } catch (err) {
       console.error(err);
@@ -203,9 +207,13 @@ export default function RecordWorkspacePage() {
   };
 
   const handleDeleteRecord = async () => {
-    if (!confirm('Are you sure you want to delete this backtest record? All associated trade entries will be permanently deleted.')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Delete backtest record?',
+      message: 'All associated trade entries will be permanently deleted.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/backtest-journal/records/${id}`, { method: 'DELETE' });
       const data = await res.json();
@@ -268,11 +276,11 @@ export default function RecordWorkspacePage() {
             }
           }
         } else {
-          alert(parsed.error || 'Failed to analyze screenshot.');
+          toast.error(parsed.error || 'Failed to analyze screenshot.');
         }
       } catch (err) {
         console.error(err);
-        alert('An error occurred while contacting the Vision API.');
+        toast.error('An error occurred while contacting the Vision API.');
       } finally {
         setAnalyzingScreenshot(false);
       }
@@ -426,7 +434,13 @@ export default function RecordWorkspacePage() {
   };
 
   const handleDeleteTrade = async (tradeId: string) => {
-    if (!confirm('Are you sure you want to delete this trade entry?')) return;
+    const ok = await confirm({
+      title: 'Delete trade entry?',
+      message: 'This trade entry will be permanently removed from the record.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/backtest-journal/trades/${tradeId}`, { method: 'DELETE' });
       const data = await res.json();
@@ -456,7 +470,7 @@ export default function RecordWorkspacePage() {
     try {
       const userKey = localStorage.getItem('google_ai_pro_key') || '';
       if (!userKey) {
-        alert('Please configure your Google AI Pro API Key in the Settings tab first.');
+        toast.info('Please configure your Google AI Pro API Key in the Settings tab first.');
         setAnalyzingTradeId(null);
         return;
       }
@@ -545,57 +559,9 @@ Required JSON structure:
       }
     } catch (err: any) {
       console.error(err);
-      alert(`AI Analysis failed: ${err.message || err}`);
+      toast.error(`AI Analysis failed: ${err.message || err}`);
     } finally {
       setAnalyzingTradeId(null);
-    }
-  };
-
-  // AI Performance Coach Chat Trigger
-  const handleSendCoachMessage = async (overridePrompt?: string) => {
-    const activePrompt = overridePrompt || chatInput;
-    if (!activePrompt.trim()) return;
-
-    const userKey = localStorage.getItem('google_ai_pro_key') || '';
-    if (!userKey) {
-      alert('Please configure your Google AI Pro API Key in the Settings tab first.');
-      return;
-    }
-
-    const newHistory = [...chatMessages];
-    if (!overridePrompt) {
-      newHistory.push({ role: 'user', content: chatInput });
-      setChatMessages(newHistory);
-      setChatInput('');
-    } else {
-      newHistory.push({ role: 'user', content: overridePrompt });
-      setChatMessages(newHistory);
-    }
-
-    setCoachLoading(true);
-
-    try {
-      const res = await fetch('/api/backtest-journal/coach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          backtestRecordId: id,
-          message: activePrompt,
-          history: chatMessages.slice(1), // ignore greeting card
-          googleApiKey: userKey,
-        }),
-      });
-      const data = await res.json();
-      if (data.success && data.data) {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: data.data }]);
-      } else {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: `Error: ${data.error || 'Failed to query AI Coach.'}` }]);
-      }
-    } catch (err: any) {
-      console.error(err);
-      setChatMessages(prev => [...prev, { role: 'assistant', content: `Connection error: ${err.message || err}` }]);
-    } finally {
-      setCoachLoading(false);
     }
   };
 
@@ -1341,80 +1307,7 @@ Required JSON structure:
         {/* ========================================================
             AI PERFORMANCE COACH TAB
             ======================================================== */}
-        {activeTab === 'coach' && (
-          <div>
-            <h1 className={styles.tabTitle}>AI Performance Coach</h1>
-            
-            <div className={styles.coachWrapper}>
-              <div className={styles.coachMessages}>
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`${styles.message} ${msg.role === 'user' ? styles.userMessage : styles.aiMessage}`}>
-                    <div className={`${styles.avatarCircle} ${msg.role === 'assistant' ? styles.avatarAi : ''}`}>
-                      {msg.role === 'user' ? 'U' : 'AI'}
-                    </div>
-                    <div className={`${styles.messageContent} ${msg.role === 'assistant' ? styles.coachMarkdown : ''}`}>
-                      {msg.role === 'user' ? (
-                        msg.content
-                      ) : (
-                        // Basic Markdown renderer
-                        <div dangerouslySetInnerHTML={{
-                          __html: msg.content
-                            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                            .replace(/### (.*?)\n/g, '<h3>$1</h3>')
-                            .replace(/## (.*?)\n/g, '<h2>$1</h2>')
-                            .replace(/- (.*?)\n/g, '<li>$1</li>')
-                            .replace(/\n\n/g, '<p></p>')
-                            .replace(/\n/g, '<br/>')
-                        }} />
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {coachLoading && (
-                  <div className={`${styles.message} ${styles.aiMessage}`}>
-                    <div className={`${styles.avatarCircle} ${styles.avatarAi}`}>AI</div>
-                    <div className={styles.messageContent} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span className={styles.loadingSpinner} style={{ width: '15px', height: '15px', borderWidth: '2px', margin: '0' }} />
-                      Analyzing trading data...
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.coachInputArea}>
-                <div className={styles.chipsContainer}>
-                  <button className={styles.promptChip} onClick={() => handleSendCoachMessage('Why am I losing?')}>
-                    Why am I losing?
-                  </button>
-                  <button className={styles.promptChip} onClick={() => handleSendCoachMessage('What is my biggest mistake?')}>
-                    What is my biggest mistake?
-                  </button>
-                  <button className={styles.promptChip} onClick={() => handleSendCoachMessage('Which confirmation works best?')}>
-                    Which confirmation works best?
-                  </button>
-                  <button className={styles.promptChip} onClick={() => handleSendCoachMessage('Compare London vs New York')}>
-                    Compare London vs New York
-                  </button>
-                </div>
-                <div className={styles.inputRow}>
-                  <input
-                    type="text"
-                    placeholder="Ask the Performance Coach a question..."
-                    className={styles.coachInput}
-                    value={chatInput}
-                    onChange={e => setChatInput(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSendCoachMessage()}
-                    disabled={coachLoading}
-                  />
-                  <button className={styles.sendBtn} onClick={() => handleSendCoachMessage()} disabled={coachLoading}>
-                    Send
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'coach' && <CoachTab backtestRecordId={id as string} />}
 
         {/* ========================================================
             SETTINGS TAB

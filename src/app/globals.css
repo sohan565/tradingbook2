@@ -103,52 +103,54 @@
 }
 
 [data-theme='dark'] {
-  /* Base Surfaces — near-black neutral with faint cool cast */
-  --bg-base: #0a0a0c;
-  --bg-primary: #0a0a0c;
-  --bg-secondary: #101013;
-  --bg-tertiary: #17171b;
-  --bg-card: #131316;
-  --bg-card-hover: #17171b;
-  --bg-elevated: #191920;
-  --bg-input: #121216;
-  --bg-input-focus: #17171d;
+  /* CYBERPUNK HUD — void black + neon radiance */
+  --bg-base: #05060a;
+  --bg-primary: #05060a;
+  --bg-secondary: #090b12;
+  --bg-tertiary: #0e1119;
+  --bg-card: #0b0d14;
+  --bg-card-hover: #10131d;
+  --bg-elevated: #0e1119;
+  --bg-input: #080a10;
+  --bg-input-focus: #0c0f17;
 
-  --glass-bg: #131316;
-  --glass-bg-heavy: #17171b;
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-strong: rgba(255, 255, 255, 0.12);
-  --glass-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 32px -12px rgba(0, 0, 0, 0.6);
+  --glass-bg: rgba(11, 13, 20, 0.82);
+  --glass-bg-heavy: rgba(14, 17, 25, 0.92);
+  --glass-border: rgba(0, 229, 255, 0.14);
+  --glass-border-strong: rgba(0, 229, 255, 0.25);
+  --glass-shadow: 0 0 0 1px rgba(0, 229, 255, 0.06), 0 12px 40px -12px rgba(0, 0, 0, 0.8);
 
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #808088;
-  --text-dim: #5c5c66;
-  --text-disabled: #3f3f46;
+  --text-primary: #e8f6ff;
+  --text-secondary: #8fa3b8;
+  --text-muted: #64788c;
+  --text-dim: #45566a;
+  --text-disabled: #2b3646;
 
-  --accent: #7d79f2;
-  --accent-light: #8f8bf5;
-  --accent-dark: #6a66e8;
-  --accent-glow: rgba(125, 121, 242, 0.14);
-  --accent-glow-strong: rgba(125, 121, 242, 0.22);
-  --accent-gradient: linear-gradient(180deg, #8480f4 0%, #7d79f2 100%);
+  /* Neon cyan primary, magenta counterpoint */
+  --accent: #00e5ff;
+  --accent-light: #5cf1ff;
+  --accent-dark: #00b8d4;
+  --accent-2: #ff2ec4;
+  --accent-glow: rgba(0, 229, 255, 0.16);
+  --accent-glow-strong: rgba(0, 229, 255, 0.30);
+  --accent-gradient: linear-gradient(135deg, #00e5ff 0%, #00b8d4 60%, #0091ea 100%);
 
-  --color-profit: #34d399;
-  --color-profit-bg: rgba(52, 211, 153, 0.10);
-  --color-profit-glow: rgba(52, 211, 153, 0.16);
-  --color-loss: #f77066;
-  --color-loss-bg: rgba(247, 112, 102, 0.10);
-  --color-loss-glow: rgba(247, 112, 102, 0.16);
-  --color-warning: #e0b450;
+  --color-profit: #00ff9d;
+  --color-profit-bg: rgba(0, 255, 157, 0.10);
+  --color-profit-glow: rgba(0, 255, 157, 0.28);
+  --color-loss: #ff3b5c;
+  --color-loss-bg: rgba(255, 59, 92, 0.10);
+  --color-loss-glow: rgba(255, 59, 92, 0.28);
+  --color-warning: #ffb020;
 
-  --border-subtle: rgba(255, 255, 255, 0.06);
-  --border-default: rgba(255, 255, 255, 0.10);
+  --border-subtle: rgba(0, 229, 255, 0.10);
+  --border-default: rgba(0, 229, 255, 0.20);
   --border-active: var(--accent);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 36px -10px rgba(0, 0, 0, 0.6);
-  --shadow-xl: 0 4px 8px rgba(0, 0, 0, 0.5), 0 28px 56px -14px rgba(0, 0, 0, 0.7);
+  --shadow-sm: 0 0 0 1px rgba(0, 229, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 0 12px -2px rgba(0, 229, 255, 0.12), 0 4px 16px -4px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 0 24px -4px rgba(0, 229, 255, 0.18), 0 16px 40px -10px rgba(0, 0, 0, 0.8);
+  --shadow-xl: 0 0 36px -4px rgba(0, 229, 255, 0.22), 0 28px 64px -14px rgba(0, 0, 0, 0.85);
 }
 
 /* ---------- Reset & Base ---------- */
@@ -196,6 +198,40 @@ body::before {
     linear-gradient(180deg, #f8f8f6 0%, var(--bg-base) 60%);
   z-index: -2;
   pointer-events: none;
+}
+
+/* CYBERPUNK backdrop (dark theme): neon horizon glows + perspective grid */
+[data-theme='dark'] body::before {
+  background:
+    radial-gradient(90% 60% at 15% 0%, rgba(0, 229, 255, 0.07) 0%, transparent 45%),
+    radial-gradient(80% 55% at 90% 100%, rgba(255, 46, 196, 0.055) 0%, transparent 48%),
+    radial-gradient(60% 40% at 60% 40%, rgba(0, 255, 157, 0.025) 0%, transparent 55%),
+    linear-gradient(rgba(0, 229, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.028) 1px, transparent 1px),
+    var(--bg-base);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 44px 44px, 44px 44px, 100% 100%;
+}
+
+/* CRT scanline overlay — sits above everything, never intercepts input */
+[data-theme='dark'] body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.08) 0px,
+    rgba(0, 0, 0, 0.08) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: multiply;
+  opacity: 0.5;
+  z-index: 2147483000;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-theme='dark'] body::after { opacity: 0.25; }
 }
 
 [data-theme='dark'] body::before {
@@ -943,6 +979,203 @@ a:hover {
   background: var(--accent-light) !important;
 }
 
+/* ============================================
+   CYBERPUNK HUD SKIN (dark theme only)
+   Neon panel treatment + HUD corner brackets,
+   glow CTAs, display-font headings.
+   ============================================ */
+
+[data-theme='dark'] {
+  --font-display: 'Orbitron', 'Outfit', system-ui, sans-serif;
+}
+
+/* HUD panels: chamfered corners + neon edge */
+[data-theme='dark'] [class*="wizardCard"],
+[data-theme='dark'] [class*="editorCard"],
+[data-theme='dark'] [class*="widgetCard"],
+[data-theme='dark'] [class*="assistantCard"],
+[data-theme='dark'] [class*="accounts_accountCard"],
+[data-theme='dark'] [class*="analytics_bentoCard"],
+[data-theme='dark'] [class*="analytics_chartContainer"],
+[data-theme='dark'] [class*="analytics_aiCoachCard"],
+[data-theme='dark'] [class*="analytics_insightsContainer"],
+[data-theme='dark'] [class*="IndicatorPanel_modal"],
+[data-theme='dark'] [class*="ObjectTreePanel_panel"] {
+  background:
+    linear-gradient(160deg, rgba(0, 229, 255, 0.045) 0%, transparent 30%),
+    var(--bg-card) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 2px !important;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  box-shadow: var(--shadow-md) !important;
+}
+
+[data-theme='dark'] [class*="wizardCard"]:hover,
+[data-theme='dark'] [class*="editorCard"]:hover,
+[data-theme='dark'] [class*="widgetCard"]:hover,
+[data-theme='dark'] [class*="assistantCard"]:hover,
+[data-theme='dark'] [class*="accounts_accountCard"]:hover,
+[data-theme='dark'] [class*="analytics_bentoCard"]:hover,
+[data-theme='dark'] [class*="analytics_chartContainer"]:hover {
+  border-color: var(--border-default) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* HUD corner bracket on panels */
+[data-theme='dark'] [class*="analytics_bentoCard"]::before,
+[data-theme='dark'] [class*="accounts_accountCard"]::before,
+[data-theme='dark'] [class*="widgetCard"]::before,
+[data-theme='dark'] [class*="wizardCard"]::before {
+  content: '' !important;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 14px;
+  height: 14px;
+  border-top: 1.5px solid var(--accent);
+  border-right: 1.5px solid var(--accent);
+  opacity: 0.75;
+  filter: drop-shadow(0 0 4px var(--accent-glow-strong));
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Neon CTAs: transparent core + glow ring instead of solid fill */
+[data-theme='dark'] [class*="saveBtn"],
+[data-theme='dark'] [class*="launchBtn"],
+[data-theme='dark'] [class*="keySaveBtn"],
+[data-theme='dark'] [class*="sendChatBtn"],
+[data-theme='dark'] [class*="TopNav_btnActive"],
+[data-theme='dark'] .btn-primary {
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.16), rgba(0, 229, 255, 0.06)) !important;
+  color: var(--accent-light) !important;
+  border: 1px solid rgba(0, 229, 255, 0.55) !important;
+  border-radius: 2px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 8px var(--accent-glow-strong) !important;
+  box-shadow:
+    0 0 12px -2px var(--accent-glow-strong),
+    inset 0 0 12px -6px var(--accent-glow-strong) !important;
+}
+
+[data-theme='dark'] [class*="saveBtn"]:hover,
+[data-theme='dark'] [class*="launchBtn"]:hover,
+[data-theme='dark'] [class*="keySaveBtn"]:hover,
+[data-theme='dark'] [class*="sendChatBtn"]:hover,
+[data-theme='dark'] [class*="TopNav_btnActive"]:hover,
+[data-theme='dark'] .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.28), rgba(0, 229, 255, 0.10)) !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 0 20px -2px var(--accent-glow-strong),
+    inset 0 0 16px -6px var(--accent-glow-strong) !important;
+}
+
+/* Display font + neon glow for page/section titles */
+[data-theme='dark'] h1,
+[data-theme='dark'] [class*="titleText"],
+[data-theme='dark'] [class*="sectionTitle"],
+[data-theme='dark'] [class*="tabTitle"],
+[data-theme='dark'] [class*="cardTitle"],
+[data-theme='dark'] [class*="brandText"] {
+  font-family: var(--font-display) !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+[data-theme='dark'] h1,
+[data-theme='dark'] [class*="titleText"],
+[data-theme='dark'] [class*="brandText"] {
+  text-shadow: 0 0 14px var(--accent-glow-strong);
+}
+
+/* Numeric emphasis: all big stat values glow softly */
+[data-theme='dark'] [class*="cardVal"] {
+  font-family: var(--font-mono) !important;
+  text-shadow: 0 0 12px currentColor;
+}
+
+/* Top navigation: holographic bar */
+[data-theme='dark'] header[class*="topNav"] {
+  background: rgba(5, 6, 10, 0.75) !important;
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border-bottom: 1px solid var(--border-subtle) !important;
+  box-shadow: 0 1px 0 rgba(0, 229, 255, 0.06), 0 8px 32px -12px rgba(0, 229, 255, 0.12);
+}
+
+[data-theme='dark'] [class*="TopNav_brandLogo"] {
+  background: transparent !important;
+  color: var(--accent) !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: 2px !important;
+  box-shadow: 0 0 12px -2px var(--accent-glow-strong), inset 0 0 8px -4px var(--accent-glow-strong);
+  text-shadow: 0 0 8px var(--accent-glow-strong);
+}
+
+[data-theme='dark'] [class*="TopNav_navItem"] {
+  border-radius: 2px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 0.72rem !important;
+}
+
+[data-theme='dark'] [class*="TopNav_active"] {
+  background: rgba(0, 229, 255, 0.10) !important;
+  color: var(--accent-light) !important;
+  box-shadow: inset 0 -2px 0 var(--accent), 0 0 16px -6px var(--accent-glow-strong);
+  text-shadow: 0 0 8px var(--accent-glow-strong);
+}
+
+/* Inputs: terminal prompt feel */
+[data-theme='dark'] input[type='text'],
+[data-theme='dark'] input[type='number'],
+[data-theme='dark'] input[type='date'],
+[data-theme='dark'] input[type='password'],
+[data-theme='dark'] textarea {
+  border-radius: 2px;
+  caret-color: var(--accent);
+}
+
+[data-theme='dark'] input:focus-visible,
+[data-theme='dark'] textarea:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+  box-shadow: 0 0 14px -4px var(--accent-glow-strong);
+}
+
+/* Neon scrollbars */
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.25);
+  background-clip: padding-box;
+}
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.45);
+  background-clip: padding-box;
+}
+
+/* Selection: magenta counterpoint */
+[data-theme='dark'] ::selection {
+  background: var(--accent-2);
+  color: #05060a;
+}
+
+/* Profit/loss values radiate */
+[data-theme='dark'] [class*="profitVal"] {
+  text-shadow: 0 0 10px var(--color-profit-glow);
+}
+[data-theme='dark'] [class*="lossVal"] {
+  text-shadow: 0 0 10px var(--color-loss-glow);
+}
+
+/* Toast skin follows the HUD */
+[data-theme='dark'] .tb-toast-success,
+[data-theme='dark'] .tb-toast-error,
+[data-theme='dark'] .tb-toast-info {
+  border-radius: 2px !important;
+}
+
 [class*="saveBtn"]:active,
 [class*="launchBtn"]:active,
 [class*="keySaveBtn"]:active,
@@ -1157,4 +1390,89 @@ button:hover svg {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ---------- Sonner toast semantic variants (tokens only) ---------- */
+.tb-toast-success {
+  border-color: var(--border-profit) !important;
+}
+.tb-toast-success [data-icon] {
+  color: var(--color-profit);
+}
+.tb-toast-error {
+  border-color: var(--border-loss) !important;
+}
+.tb-toast-error [data-icon] {
+  color: var(--color-loss);
+}
+.tb-toast-info [data-icon] {
+  color: var(--accent);
+}
+
+/* ---------- Token-styled range sliders (all native range inputs) ---------- */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+}
+input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--border-default);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  border: 2px solid var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--t-fast);
+}
+input[type='range']::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  border: 2px solid var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+}
+input[type='range']:hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+input[type='range']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-full);
+}
+
+/* ---------- AI chat typing indicator ---------- */
+.tb-typing-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+}
+.tb-typing-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--text-muted);
+  animation: tb-typing-bounce 1.2s infinite ease-in-out;
+}
+.tb-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.tb-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tb-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
 }

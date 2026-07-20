@@ -250,6 +250,113 @@ export interface WebhookTradePayload {
   commission?: number;
   sl?: number;
   tp?: number;
-  magic?: number;
-  comment?: string;
 }
+
+// ---------- Chart Settings ----------
+
+export interface ChartSettings {
+  // Canvas / Basic Styles
+  backgroundType: 'solid' | 'gradient';
+  backgroundColor: string;
+  showVertGridLines: boolean;
+  vertGridColor: string;
+  vertGridStyle: 'solid' | 'dashed' | 'dotted';
+  showHorzGridLines: boolean;
+  horzGridColor: string;
+  horzGridStyle: 'solid' | 'dashed' | 'dotted';
+  crosshairColor: string;
+  crosshairStyle: 'solid' | 'dashed' | 'dotted';
+  watermarkVisibility: 'hidden' | 'ticker' | 'interval' | 'description' | 'replay';
+  watermarkColor: string;
+
+  // Scales
+  scalesTextColor: string;
+  scalesFontSize: number;
+  scalesLinesColor: string;
+
+  // Buttons
+  navigationButtons: 'always' | 'mouseover' | 'never';
+  paneButtons: 'always' | 'mouseover' | 'never';
+
+  // Symbol
+  candleUpColor: string;
+  candleDownColor: string;
+  borderUpColor: string;
+  borderDownColor: string;
+  wickUpColor: string;
+  wickDownColor: string;
+  showLastPriceLine: boolean;
+  lastPriceLineColor: string;
+  showHighLowLines: boolean;
+
+  // Status Line
+  showLogo: boolean;
+  showTitle: boolean;
+  showOpenMarketStatus: boolean;
+  showOHLC: boolean;
+  showBarChange: boolean;
+  showVolume: boolean;
+
+  // Scales & Lines
+  showSymbolNameLabel: boolean;
+  showSymbolLastPriceLabel: boolean;
+  showHighLowPriceLabels: boolean;
+  showCountdownToBarClose: boolean;
+
+  // Trading
+  showPositions: boolean;
+  showOrders: boolean;
+  showTradeHistory: boolean;
+  showTradeLevels: boolean;
+  showBuySellButtons: boolean;
+}
+
+export const DEFAULT_CHART_SETTINGS: ChartSettings = {
+  backgroundType: 'solid',
+  backgroundColor: '#ffffff', // Pure white default matching Screenshot 1
+  showVertGridLines: true,
+  vertGridColor: '#f0f3fa',
+  vertGridStyle: 'solid',
+  showHorzGridLines: true,
+  horzGridColor: '#f0f3fa',
+  horzGridStyle: 'solid',
+  crosshairColor: '#787b86',
+  crosshairStyle: 'dashed',
+  watermarkVisibility: 'hidden',
+  watermarkColor: 'rgba(0, 0, 0, 0.05)',
+
+  scalesTextColor: '#131722',
+  scalesFontSize: 12,
+  scalesLinesColor: '#e0e3eb',
+
+  navigationButtons: 'mouseover',
+  paneButtons: 'mouseover',
+
+  candleUpColor: '#089981', // TradingView Teal Green
+  candleDownColor: '#f23645', // TradingView Red
+  borderUpColor: '#089981',
+  borderDownColor: '#f23645',
+  wickUpColor: '#089981',
+  wickDownColor: '#f23645',
+  showLastPriceLine: true,
+  lastPriceLineColor: '#f23645',
+  showHighLowLines: false,
+
+  showLogo: true,
+  showTitle: true,
+  showOpenMarketStatus: true,
+  showOHLC: true,
+  showBarChange: true,
+  showVolume: true,
+
+  showSymbolNameLabel: true,
+  showSymbolLastPriceLabel: true,
+  showHighLowPriceLabels: false,
+  showCountdownToBarClose: true,
+
+  showPositions: true,
+  showOrders: true,
+  showTradeHistory: true,
+  showTradeLevels: true,
+  showBuySellButtons: true,
+};

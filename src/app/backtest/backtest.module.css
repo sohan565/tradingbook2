@@ -10,28 +10,28 @@
    the global component overrides resolve to dark. */
 .backtestContainer,
 .mobileBacktestContainer {
-  --term-bg: #0a0a0c;
-  --term-surface: #0e0e12;
-  --term-panel: #0c0c10;
-  --term-card: #141418;
-  --term-card-hover: #191920;
-  --term-input: #101014;
-  --term-border: rgba(255, 255, 255, 0.06);
-  --term-border-strong: rgba(255, 255, 255, 0.11);
-  --term-text: #f2f2f4;
-  --term-text-2: #a9a9b3;
-  --term-text-3: #7a7a85;
-  --term-text-4: #56565f;
-  --term-accent: #7d79f2;
-  --term-accent-2: #8f8bf5;
-  --term-accent-soft: rgba(125, 121, 242, 0.13);
-  --term-accent-border: rgba(125, 121, 242, 0.30);
-  --term-up: #26b981;
-  --term-up-soft: rgba(38, 185, 129, 0.11);
-  --term-up-border: rgba(38, 185, 129, 0.28);
-  --term-down: #ef5b52;
-  --term-down-soft: rgba(239, 91, 82, 0.11);
-  --term-down-border: rgba(239, 91, 82, 0.28);
+  --term-bg: #05060a;
+  --term-surface: #090b12;
+  --term-panel: #07080e;
+  --term-card: #0b0d14;
+  --term-card-hover: #10131d;
+  --term-input: #080a10;
+  --term-border: rgba(0, 229, 255, 0.09);
+  --term-border-strong: rgba(0, 229, 255, 0.20);
+  --term-text: #e8f6ff;
+  --term-text-2: #8fa3b8;
+  --term-text-3: #64788c;
+  --term-text-4: #45566a;
+  --term-accent: #00e5ff;
+  --term-accent-2: #5cf1ff;
+  --term-accent-soft: rgba(0, 229, 255, 0.12);
+  --term-accent-border: rgba(0, 229, 255, 0.32);
+  --term-up: #00ff9d;
+  --term-up-soft: rgba(0, 255, 157, 0.11);
+  --term-up-border: rgba(0, 255, 157, 0.30);
+  --term-down: #ff3b5c;
+  --term-down-soft: rgba(255, 59, 92, 0.11);
+  --term-down-border: rgba(255, 59, 92, 0.30);
 
   /* Re-scope global tokens so [class*=wizardCard] overrides stay dark */
   --bg-card: var(--term-card);
@@ -1717,23 +1717,30 @@
 
 .editableField {
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 3px 8px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.12);
   font-family: monospace;
   font-size: 0.8rem;
+  line-height: 1.3;
   transition: all 0.15s ease;
   user-select: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 52px;
+  justify-content: center;
 }
 .editableField:hover {
   background: rgba(125, 121, 242, 0.15);
   border-color: var(--term-accent, #7d79f2);
   color: var(--term-accent-light, #8f8bf5);
   box-shadow: 0 0 0 1px rgba(125, 121, 242, 0.2);
+}
+.editableField:active {
+  background: rgba(125, 121, 242, 0.25);
+  transform: scale(0.98);
 }
 
 .smallPriceInput {
@@ -1742,11 +1749,22 @@
   border: 1px solid var(--term-accent, #7d79f2);
   border-radius: 4px;
   color: #fff;
-  padding: 2px 6px;
+  padding: 3px 8px;
   font-family: monospace;
   font-size: 0.8rem;
   outline: none;
   box-shadow: 0 0 0 2px rgba(125, 121, 242, 0.25);
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.smallPriceInput:focus {
+  border-color: var(--term-accent-light, #8f8bf5);
+  box-shadow: 0 0 0 3px rgba(125, 121, 242, 0.35);
+}
+.smallPriceInput::-webkit-outer-spin-button,
+.smallPriceInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .closeDropdown {
@@ -1948,3 +1966,26 @@
 }
 
 
+
+/* ---------- Data-table upgrades (bottom panel) ---------- */
+.bottomTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--term-panel);
+}
+.sortableTh {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--t-fast);
+}
+.sortableTh:hover {
+  color: var(--term-text-2, var(--text-secondary));
+}
+.numCell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+th.numCell {
+  text-align: right;
+}

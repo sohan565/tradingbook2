@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import {
   createChart,
   LineSeries,
@@ -15,7 +16,11 @@ import {
   calculateBacktestStats,
   SYMBOLS,
 } from '@/lib/trade-math';
+import Select from '@/components/ui/Select';
+import { CountUp, Sparkline } from '@/components/ui/StatParts';
 import styles from './analytics.module.css';
+
+const AiCoachCard = dynamic(() => import('./AiCoachCard'), { ssr: false });
 
 // Extended type for trade with mood mapping
 interface TradeWithMood extends TradeRecord {
@@ -413,10 +418,6 @@ export default function AnalyticsPage() {
 
   const [trades, setTrades] = useState<TradeWithMood[]>([]);
   const [backtestSessions, setBacktestSessions] = useState<any[]>([]);
-  const [aiInsights, setAiInsights] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
-  const [chatInput, setChatInput] = useState<string>('');
-  const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
 
@@ -427,7 +428,6 @@ export default function AnalyticsPage() {
   // Charts references
   const equityContainerRef = useRef<HTMLDivElement>(null);
   const drawdownContainerRef = useRef<HTMLDivElement>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const equityChartRef = useRef<IChartApi | null>(null);
   const equitySeriesRef = useRef<ISeriesApi<'Area'> | null>(null);
@@ -580,6 +580,30 @@ export default function AnalyticsPage() {
     return calculateBacktestStats(filteredTrades);
   }, [filteredTrades]);
 
+  // Cumulative P&L series for the stat-card sparkline
+  const equitySpark = useMemo(() => {
+    const series: number[] = [];
+    filteredTrades.reduce((running, t) => {
+      const next = running + (t.pnl ?? 0);
+      series.push(next);
+      return next;
+    }, 0);
+    return series;
+  }, [filteredTrades]);
+
+  // Human-readable name of the active source filter (sent to the AI coach)
+  const activeSourceName = useMemo(() => {
+    if (sourceFilter === 'live-all') return 'Live / Sync Database';
+    if (sourceFilter === 'backtest-all') return 'All Backtests Combined';
+    if (sourceFilter.startsWith('backtest-session-')) {
+      const matchingSession = backtestSessions.find(s => `backtest-session-${s.id}` === sourceFilter);
+      if (matchingSession) return `${matchingSession.name} (Backtest)`;
+    }
+    if (sourceFilter === 'mt5') return 'MetaTrader 5 Only';
+    if (sourceFilter === 'manual') return 'Manual Entry Only';
+    return 'All Sources';
+  }, [sourceFilter, backtestSessions]);
+
   // Extended Advanced stats (Sharpe Ratio, Expectancy)
   const advancedStats = useMemo(() => {
     if (filteredTrades.length === 0) {
@@ -669,152 +693,7 @@ export default function AnalyticsPage() {
       .filter((d) => d.count > 0); // only show moods that have trade data
   }, [filteredTrades]);
 
-  // Clear AI insights when filters change
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setAiInsights(null);
-      setChatMessages([]);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [sourceFilter, symbolFilter, timeRange]);
 
-  // Scroll chat window to bottom
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
-  const handleGenerateAiInsights = async () => {
-    setIsGeneratingAi(true);
-    setAiInsights(null);
-    setChatMessages([]);
-    try {
-      let activeSourceName = 'All Sources';
-      if (sourceFilter === 'live-all') activeSourceName = 'Live / Sync Database';
-      else if (sourceFilter === 'backtest-all') activeSourceName = 'All Backtests Combined';
-      else if (sourceFilter.startsWith('backtest-session-')) {
-        const matchingSession = backtestSessions.find(s => `backtest-session-${s.id}` === sourceFilter);
-        if (matchingSession) activeSourceName = `${matchingSession.name} (Backtest)`;
-      } else if (sourceFilter === 'mt5') activeSourceName = 'MetaTrader 5 Only';
-      else if (sourceFilter === 'manual') activeSourceName = 'Manual Entry Only';
-
-      const res = await fetch('/api/analytics/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stats,
-          recentTrades: filteredTrades.slice(-10), // Send last 10 trades for analysis
-          sourceName: activeSourceName,
-        })
-      });
-
-      const json = await res.json();
-      if (json.success && json.data) {
-        setAiInsights(json.data);
-        setChatMessages([{ role: 'assistant', content: json.data }]);
-      } else {
-        alert(json.error || 'Failed to generate AI insights.');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('Error communicating with the AI Performance Coach.');
-    } finally {
-      setIsGeneratingAi(false);
-    }
-  };
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isGeneratingAi) return;
-
-    const userMessageText = chatInput.trim();
-    setChatInput('');
-
-    const nextMessages = [...chatMessages, { role: 'user' as const, content: userMessageText }];
-    setChatMessages(nextMessages);
-    setIsGeneratingAi(true);
-
-    try {
-      let activeSourceName = 'All Sources';
-      if (sourceFilter === 'live-all') activeSourceName = 'Live / Sync Database';
-      else if (sourceFilter === 'backtest-all') activeSourceName = 'All Backtests Combined';
-      else if (sourceFilter.startsWith('backtest-session-')) {
-        const matchingSession = backtestSessions.find(s => `backtest-session-${s.id}` === sourceFilter);
-        if (matchingSession) activeSourceName = `${matchingSession.name} (Backtest)`;
-      } else if (sourceFilter === 'mt5') activeSourceName = 'MetaTrader 5 Only';
-      else if (sourceFilter === 'manual') activeSourceName = 'Manual Entry Only';
-
-      const res = await fetch('/api/analytics/ai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stats,
-          recentTrades: filteredTrades.slice(-10),
-          sourceName: activeSourceName,
-          history: nextMessages,
-        })
-      });
-
-      const json = await res.json();
-      if (json.success && json.data) {
-        setChatMessages([...nextMessages, { role: 'assistant' as const, content: json.data }]);
-      } else {
-        alert(json.error || 'Failed to get AI coach reply.');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error communicating with the AI Performance Coach.');
-    } finally {
-      setIsGeneratingAi(false);
-    }
-  };
-
-  // Helper functions to render markdown inline inside JSX
-  function parseBoldText(text: string) {
-    const parts = text.split(/\*\*(.*?)\*\*/g);
-    return parts.map((part, i) => {
-      if (i % 2 === 1) {
-        return <strong key={i} style={{ color: '#ffffff', fontWeight: 700 }}>{part}</strong>;
-      }
-      return part;
-    });
-  }
-
-  function renderAiInsights(text: string | null) {
-    if (!text) return null;
-    const lines = text.split('\n');
-    return lines.map((line, idx) => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('###')) {
-        return (
-          <h4 key={idx} style={{ color: 'var(--accent)', marginTop: '1.25rem', marginBottom: '0.5rem', fontWeight: 800, fontSize: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.05)', paddingBottom: '0.25rem' }}>
-            {trimmed.replace(/^###\s*/, '')}
-          </h4>
-        );
-      }
-      if (trimmed.startsWith('1.') || trimmed.startsWith('2.') || trimmed.startsWith('3.') || trimmed.startsWith('4.')) {
-        return (
-          <h4 key={idx} style={{ color: 'var(--accent)', marginTop: '1.25rem', marginBottom: '0.5rem', fontWeight: 800, fontSize: '0.95rem' }}>
-            {trimmed}
-          </h4>
-        );
-      }
-      if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
-        const content = trimmed.replace(/^[-*]\s*/, '');
-        return (
-          <li key={idx} style={{ marginLeft: '1.25rem', marginBottom: '0.5rem', listStyleType: 'disc', fontSize: '0.85rem', lineHeight: 1.5, color: '#94a3b8' }}>
-            {parseBoldText(content)}
-          </li>
-        );
-      }
-      if (trimmed.length === 0) return <div key={idx} style={{ height: '0.4rem' }} />;
-      
-      return (
-        <p key={idx} style={{ fontSize: '0.85rem', lineHeight: 1.5, marginBottom: '0.75rem', color: '#94a3b8' }}>
-          {parseBoldText(trimmed)}
-        </p>
-      );
-    });
-  }
 
   // Render Charts (Lightweight Charts)
   useEffect(() => {
@@ -1149,51 +1028,53 @@ export default function AnalyticsPage() {
 
           <div className={styles.filtersRow}>
             {/* Timeframe selector */}
-            <select
+            <Select
               className={styles.filterSelect}
+              ariaLabel="Time range"
               value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-            >
-              <option value="all">All Time</option>
-              <option value="7d">Last 7 Days</option>
-              <option value="30d">Last 30 Days</option>
-              <option value="90d">Last 90 Days</option>
-              <option value="mtd">Month to Date</option>
-            </select>
+              onChange={setTimeRange}
+              style={{ minWidth: 140 }}
+              options={[
+                { value: 'all', label: 'All Time' },
+                { value: '7d', label: 'Last 7 Days' },
+                { value: '30d', label: 'Last 30 Days' },
+                { value: '90d', label: 'Last 90 Days' },
+                { value: 'mtd', label: 'Month to Date' },
+              ]}
+            />
 
             {/* Source selector */}
-            <select
+            <Select
               className={styles.filterSelect}
+              ariaLabel="Trade source"
               value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
-            >
-              <option value="all">All Sources</option>
-              <option value="live-all">Live / Sync Database</option>
-              <option value="mt5">MetaTrader 5 Only</option>
-              <option value="manual">Manual Entry Only</option>
-              <option value="backtest-all">All Backtests Combined</option>
-              {backtestSessions.length > 0 && <optgroup label="Backtest Sessions">
-                {backtestSessions.map(session => (
-                  <option key={session.id} value={`backtest-session-${session.id}`}>
-                    {session.name} (Backtest)
-                  </option>
-                ))}
-              </optgroup>}
-            </select>
+              onChange={setSourceFilter}
+              style={{ minWidth: 190 }}
+              options={[
+                { value: 'all', label: 'All Sources' },
+                { value: 'live-all', label: 'Live / Sync Database' },
+                { value: 'mt5', label: 'MetaTrader 5 Only' },
+                { value: 'manual', label: 'Manual Entry Only' },
+                { value: 'backtest-all', label: 'All Backtests Combined' },
+                ...backtestSessions.map(session => ({
+                  value: `backtest-session-${session.id}`,
+                  label: `${session.name} (Backtest)`,
+                })),
+              ]}
+            />
 
             {/* Symbol selector */}
-            <select
+            <Select
               className={styles.filterSelect}
+              ariaLabel="Symbol"
               value={symbolFilter}
-              onChange={(e) => setSymbolFilter(e.target.value)}
-            >
-              <option value="all">All Symbols</option>
-              {uniqueSymbols.map((sym) => (
-                <option key={sym} value={sym}>
-                  {sym}
-                </option>
-              ))}
-            </select>
+              onChange={setSymbolFilter}
+              style={{ minWidth: 140 }}
+              options={[
+                { value: 'all', label: 'All Symbols' },
+                ...uniqueSymbols.map((sym) => ({ value: sym, label: sym })),
+              ]}
+            />
           </div>
         </header>
 
@@ -1226,88 +1107,13 @@ export default function AnalyticsPage() {
         ) : (
           /* Dashboard Workspace */
           <main className={styles.workspace}>
-            {/* AI Performance Coach Section */}
-            <div className={styles.aiCoachCard}>
-              <div className={styles.aiCoachHeader}>
-                <div className={styles.aiCoachTitle}>
-                  🧠 <span>AI Performance Coach</span>
-                </div>
-                <button 
-                  className={styles.generateBtn} 
-                  onClick={chatMessages.length > 0 ? () => { setChatMessages([]); setAiInsights(null); } : handleGenerateAiInsights}
-                  disabled={isGeneratingAi && chatMessages.length === 0}
-                >
-                  {isGeneratingAi && chatMessages.length === 0 ? (
-                    <>
-                      <span className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', borderColor: '#ffffff', borderTopColor: 'transparent', display: 'inline-block', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '0.4rem' }} />
-                      Coaching...
-                    </>
-                  ) : chatMessages.length > 0 ? (
-                    '🧹 Clear Chat'
-                  ) : (
-                    '✨ Coach My Trades'
-                  )}
-                </button>
-              </div>
-              <div className={styles.aiCoachDesc}>
-                Get personalized mathematical coaching tips based on your current filter profile. We analyze your win rate, profit factor, drawdown, and recent tags to identify leaks and patterns.
-              </div>
-              
-              {(isGeneratingAi || chatMessages.length > 0) && (
-                <div className={styles.aiCoachBody}>
-                  {isGeneratingAi && chatMessages.length === 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '2rem 0' }}>
-                      <div className="spinner" style={{ borderTopColor: 'var(--accent)', animation: 'spin 1s linear infinite' }} />
-                      <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>Nemotron-3-Ultra Coach is reviewing your stats...</span>
-                    </div>
-                  )}
-
-                  {chatMessages.length > 0 && (
-                    <>
-                      <div className={styles.chatTimeline}>
-                        {chatMessages.map((msg, i) => (
-                          <div 
-                            key={i} 
-                            className={`${styles.msgBubble} ${msg.role === 'user' ? styles.userMsg : styles.assistantMsg}`}
-                          >
-                            {msg.role === 'assistant' ? (
-                              <div>{renderAiInsights(msg.content)}</div>
-                            ) : (
-                              <div style={{ fontSize: '0.85rem', lineHeight: 1.5, color: '#ffffff' }}>{msg.content}</div>
-                            )}
-                          </div>
-                        ))}
-                        {isGeneratingAi && chatMessages.length % 2 === 1 && (
-                          <div className={`${styles.msgBubble} ${styles.assistantMsg}`} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', opacity: 0.8 }}>
-                            <span className="spinner" style={{ width: '10px', height: '10px', borderWidth: '1.5px', borderTopColor: 'transparent', display: 'inline-block', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '0.25rem' }} />
-                            <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Coach is thinking...</span>
-                          </div>
-                        )}
-                        <div ref={chatEndRef} />
-                      </div>
-
-                      <form onSubmit={handleSendMessage} className={styles.chatInputRow}>
-                        <input
-                          type="text"
-                          className={styles.chatInputField}
-                          placeholder="Ask the AI Coach a follow-up question..."
-                          value={chatInput}
-                          onChange={(e) => setChatInput(e.target.value)}
-                          disabled={isGeneratingAi}
-                        />
-                        <button 
-                          type="submit" 
-                          className={styles.sendBtn}
-                          disabled={isGeneratingAi || !chatInput.trim()}
-                        >
-                          💬 Send
-                        </button>
-                      </form>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* AI Performance Coach Section (dynamic-imported, self-contained state) */}
+            <AiCoachCard
+              key={`${sourceFilter}|${symbolFilter}|${timeRange}`}
+              stats={stats}
+              recentTrades={filteredTrades.slice(-10)}
+              sourceName={activeSourceName}
+            />
 
             {/* Bento Grid: Key Metrics */}
             <section className={styles.bentoGrid}>
@@ -1326,14 +1132,20 @@ export default function AnalyticsPage() {
                     stats.netPnl >= 0 ? styles.profitVal : styles.lossVal
                   }`}
                 >
-                  {formatCurrency(stats.netPnl)}
+                  <CountUp value={stats.netPnl} format={formatCurrency} />
                 </div>
-                <div className={styles.cardSub}>
-                  Account Growth:{' '}
-                  <span className={stats.netPnl >= 0 ? styles.profitVal : styles.lossVal}>
-                    {stats.netPnl >= 0 ? '+' : ''}
-                    {((stats.netPnl / INITIAL_BALANCE) * 100).toFixed(2)}%
+                <div className={styles.cardSub} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                  <span>
+                    Account Growth:{' '}
+                    <span className={stats.netPnl >= 0 ? styles.profitVal : styles.lossVal}>
+                      {stats.netPnl >= 0 ? '+' : ''}
+                      {((stats.netPnl / INITIAL_BALANCE) * 100).toFixed(2)}%
+                    </span>
                   </span>
+                  <Sparkline
+                    data={equitySpark}
+                    color={stats.netPnl >= 0 ? 'var(--color-profit)' : 'var(--color-loss)'}
+                  />
                 </div>
               </div>
 
@@ -1343,7 +1155,9 @@ export default function AnalyticsPage() {
                   <span className={styles.cardTitle}>Win Rate</span>
                   <span className={styles.cardIcon}>🎯</span>
                 </div>
-                <div className={styles.cardVal}>{formatPercent(stats.winRate)}</div>
+                <div className={styles.cardVal}>
+                  <CountUp value={stats.winRate} format={formatPercent} />
+                </div>
                 <div className={styles.cardSub}>
                   Total Wins:{' '}
                   <span className={styles.subHighlight}>{stats.winCount}</span> / Losses:{' '}
@@ -1358,7 +1172,11 @@ export default function AnalyticsPage() {
                   <span className={styles.cardIcon}>📊</span>
                 </div>
                 <div className={styles.cardVal}>
-                  {stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
+                  {stats.profitFactor === Infinity ? (
+                    '∞'
+                  ) : (
+                    <CountUp value={stats.profitFactor} format={(n) => n.toFixed(2)} />
+                  )}
                 </div>
                 <div className={styles.cardSub}>
                   Gross Profit:{' '}
@@ -1373,8 +1191,10 @@ export default function AnalyticsPage() {
                   <span className={styles.cardIcon}>📈</span>
                 </div>
                 <div className={styles.cardVal}>
-                  {advancedStats.expectancy >= 0 ? '+' : ''}
-                  {formatCurrency(advancedStats.expectancy)}
+                  <CountUp
+                    value={advancedStats.expectancy}
+                    format={(n) => `${n >= 0 ? '+' : ''}${formatCurrency(n)}`}
+                  />
                 </div>
                 <div className={styles.cardSub}>
                   Sharpe Ratio: <span className={styles.subHighlight}>{advancedStats.sharpeRatio}</span>
@@ -1388,7 +1208,7 @@ export default function AnalyticsPage() {
                   <span className={styles.cardIcon}>⚠️</span>
                 </div>
                 <div className={styles.cardVal} style={{ color: 'var(--color-loss)' }}>
-                  -{formatCurrency(stats.maxDrawdown)}
+                  <CountUp value={stats.maxDrawdown} format={(n) => `-${formatCurrency(n)}`} />
                 </div>
                 <div className={styles.cardSub}>
                   Peak Drop:{' '}
@@ -1602,26 +1422,26 @@ export default function AnalyticsPage() {
                     Daily P&L Heatmap
                   </h4>
                   <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <select
-                      className={styles.filterSelect}
-                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '6px', cursor: 'pointer' }}
-                      value={calendarMonth}
-                      onChange={(e) => setCalendarMonth(parseInt(e.target.value, 10))}
-                    >
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => (
-                        <option key={m} value={idx}>{m}</option>
-                      ))}
-                    </select>
-                    <select
-                      className={styles.filterSelect}
-                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '6px', cursor: 'pointer' }}
-                      value={calendarYear}
-                      onChange={(e) => setCalendarYear(parseInt(e.target.value, 10))}
-                    >
-                      {Array.from({ length: 16 }, (_, i) => 2015 + i).map((y) => (
-                        <option key={y} value={y}>{y}</option>
-                      ))}
-                    </select>
+                    <Select
+                      ariaLabel="Calendar month"
+                      value={String(calendarMonth)}
+                      onChange={(v) => setCalendarMonth(parseInt(v, 10))}
+                      style={{ minWidth: 84 }}
+                      options={['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, idx) => ({
+                        value: String(idx),
+                        label: m,
+                      }))}
+                    />
+                    <Select
+                      ariaLabel="Calendar year"
+                      value={String(calendarYear)}
+                      onChange={(v) => setCalendarYear(parseInt(v, 10))}
+                      style={{ minWidth: 92 }}
+                      options={Array.from({ length: 16 }, (_, i) => 2015 + i).map((y) => ({
+                        value: String(y),
+                        label: String(y),
+                      }))}
+                    />
                   </div>
                 </div>
 

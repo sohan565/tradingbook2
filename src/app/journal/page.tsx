@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import type { JournalEntry, TradeRecord, Mood } from '@/types';
 import { formatCurrency } from '@/lib/trade-math';
 import styles from './journal.module.css';
@@ -131,9 +132,6 @@ export default function JournalPage() {
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const [tagInput, setTagInput] = useState<string>('');
-  const [showToast, setShowToast] = useState<boolean>(false);
-  const [toastMsg, setToastMsg] = useState<string>('');
-  
   // Tab state
   type TabId = 'overview' | 'preSession' | 'notes' | 'postSession' | 'assistant';
   const [activeTab, setActiveTab] = useState<TabId>('overview');
@@ -195,9 +193,7 @@ export default function JournalPage() {
       }
     }
     setIsKeySetupVisible(false);
-    setToastMsg(trimmed ? 'API Key saved locally! 🔑' : 'API Key cleared.');
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 2000);
+    toast.success(trimmed ? 'API Key saved locally!' : 'API Key cleared.');
   };
 
   const handleSendAssistantMessage = async (textToSend?: string) => {
@@ -409,11 +405,11 @@ export default function JournalPage() {
         // Also insert image link in notes
         insertText(`\n![Screenshot](${data.url})\n`, '');
       } else {
-        alert('Upload failed: ' + (data.error || 'Unknown error'));
+        toast.error('Upload failed: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('Upload request error:', err);
-      alert('Error uploading screenshot.');
+      toast.error('Error uploading screenshot.');
     }
   };
 
@@ -474,15 +470,13 @@ export default function JournalPage() {
       const data = await res.json();
       if (data.success) {
         setEntryExists(true);
-        setToastMsg('Journal saved successfully! 🚀');
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+        toast.success('Journal saved successfully!');
       } else {
-        alert('Failed to save: ' + (data.error || 'Unknown error'));
+        toast.error('Failed to save: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('Save journal request error:', err);
-      alert('Network error while saving.');
+      toast.error('Network error while saving.');
     } finally {
       setIsSaving(false);
     }
@@ -942,12 +936,6 @@ export default function JournalPage() {
         </main>
       </div>
 
-      {/* Success Alert Toast */}
-      {showToast && (
-        <div className={styles.toastOverlay}>
-          {toastMsg}
-        </div>
-      )}
     </div>
   );
 }

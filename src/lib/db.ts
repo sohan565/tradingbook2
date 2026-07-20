@@ -10,7 +10,6 @@ const prismaClientSingleton = () => {
     ],
   });
 
-  // @ts-ignore
   client.$on('query', (e: any) => {
     logger.info('DATABASE', `${e.query} | Params: ${e.params} | Duration: ${e.duration}ms`);
   });
@@ -19,7 +18,6 @@ const prismaClientSingleton = () => {
 };
 
 declare global {
-  // eslint-disable-next-line no-var
   var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
 }
 

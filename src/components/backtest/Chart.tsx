@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
+import { toast } from 'sonner';
 import {
   createChart,
   CandlestickSeries,
@@ -20,11 +21,12 @@ import type {
   ISeriesPrimitive,
   SeriesAttachedParameter,
 } from 'lightweight-charts';
-import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay, TradeRecord } from '@/types';
+import type { CandleData, ChartMarker, OpenPosition, OHLCDisplay, TradeRecord, ChartSettings } from '@/types';
 import styles from './Chart.module.css';
 import { computeHeikinAshi } from '@/lib/heikin-ashi';
 import { TIMEFRAME_SECONDS } from '@/lib/aggregator';
 import { getSymbolConfig, formatPrice, formatCurrency, formatPips, formatPercent, calculatePnL } from '@/lib/trade-math';
+import { drawingsShallowEqual } from '@/lib/drawing-utils';
 
 // Import Drawing tools from lightweight-charts-drawing
 import {
@@ -57,7 +59,7 @@ import {
 } from './DrawingControls';
 
 
-// â”€â”€ RECTANGLE 8-HANDLE PROTOTYPE OVERRIDES â”€â”€
+// == RECTANGLE 8-HANDLE PROTOTYPE OVERRIDES ==
 if (typeof window !== 'undefined') {
   const proto = (Rectangle as any).prototype;
 
@@ -227,8 +229,11 @@ interface ChartProps {
   closedTrades?: TradeRecord[];
   showTradeHistory?: boolean;
   showTradeLevels?: boolean;
+  chartSettings?: ChartSettings;
   onUpdateSLTP?: (id: string, sl: number | undefined, tp: number | undefined) => void;
   onUpdateEntryPrice?: (id: string, entryPrice: number) => void;
+  onClosePosition?: (positionId: string) => void;
+  onPlaceTrade?: (type: 'BUY' | 'SELL') => void;
 }
 
 export interface ChartRef {
@@ -455,8 +460,11 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   closedTrades = [],
   showTradeHistory = true,
   showTradeLevels = true,
+  chartSettings,
   onUpdateSLTP,
   onUpdateEntryPrice,
+  onClosePosition,
+  onPlaceTrade,
 }: ChartProps, ref) {
   const isShiftPressedRef = useRef(false);
   const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
@@ -478,6 +486,11 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const tradeHistoryPrimitiveRef = useRef<TradeHistoryPrimitive | null>(null);
   // Track candle data identity: first timestamp + last timestamp + count
   const dataSignatureRef = useRef<string>('');
+  // Incremental series-sync bookkeeping (what the chart series currently hold)
+  const syncedCountRef = useRef<number>(0);
+  const syncedFirstTimeRef = useRef<number>(0);
+  const syncedTailTimeRef = useRef<number>(0);
+  const lastSyncedMarkersRef = useRef<ChartMarker[] | null>(null);
   const activeToolRef = useRef<string | null>(activeTool);
   const pendingAnchorsRef = useRef<Anchor[]>([]);
   const prevSessionKeyRef = useRef<string | undefined>(sessionKey);
@@ -505,6 +518,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   // References for Drawing Manager
   const drawingManagerRef = useRef<DrawingManager | null>(null);
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map());
+  // Incremental indicator-sync bookkeeping
+  const indicatorCandlePrevRef = useRef<{ count: number; firstTime: number; tailTime: number }>({ count: 0, firstTime: 0, tailTime: 0 });
+  const prevIndicatorsIdentityRef = useRef<unknown>(null);
 
   // Keep track of active price lines to clean them up properly
   // Map of positionId -> { entryLine, slLine?, tpLine? }
@@ -932,32 +948,33 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     // Create chart
     const chart = createChart(container, {
       layout: {
-        background: { color: '#07080a' },
-        textColor: '#94a3b8',
+        background: { color: chartSettings?.backgroundColor || '#ffffff' },
+        textColor: chartSettings?.scalesTextColor || '#131722',
+        fontSize: chartSettings?.scalesFontSize || 12,
       },
       grid: {
-        vertLines: { color: '#0f121a' },
-        horzLines: { color: '#0f121a' },
+        vertLines: { color: chartSettings?.showVertGridLines !== false ? (chartSettings?.vertGridColor || '#f0f3fa') : 'transparent' },
+        horzLines: { color: chartSettings?.showHorzGridLines !== false ? (chartSettings?.horzGridColor || '#f0f3fa') : 'transparent' },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: {
-          color: '#334155',
+          color: chartSettings?.crosshairColor || '#787b86',
           width: 1,
           style: LineStyle.Dashed,
         },
         horzLine: {
-          color: '#334155',
+          color: chartSettings?.crosshairColor || '#787b86',
           width: 1,
           style: LineStyle.Dashed,
         },
       },
       rightPriceScale: {
-        borderColor: '#141722',
+        borderColor: chartSettings?.scalesLinesColor || '#e0e3eb',
         autoScale: true,
       },
       timeScale: {
-        borderColor: '#141722',
+        borderColor: chartSettings?.scalesLinesColor || '#e0e3eb',
         timeVisible: true,
         secondsVisible: false,
         tickMarkFormatter: (time: number, tickMarkType: number, locale: string) => {
@@ -1031,17 +1048,17 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       });
     } else if (chartType === 'Bars') {
       candleSeries = chart.addSeries(BarSeries, {
-        upColor: '#00e676',
-        downColor: '#ff3d00',
+        upColor: chartSettings?.candleUpColor || '#089981',
+        downColor: chartSettings?.candleDownColor || '#f23645',
       });
     } else {
       candleSeries = chart.addSeries(CandlestickSeries, {
-        upColor: '#00e676',
-        downColor: '#ff3d00',
-        borderUpColor: '#00e676',
-        borderDownColor: '#ff3d00',
-        wickUpColor: '#00e676',
-        wickDownColor: '#ff3d00',
+        upColor: chartSettings?.candleUpColor || '#089981',
+        downColor: chartSettings?.candleDownColor || '#f23645',
+        borderUpColor: chartSettings?.borderUpColor || '#089981',
+        borderDownColor: chartSettings?.borderDownColor || '#f23645',
+        wickUpColor: chartSettings?.wickUpColor || '#089981',
+        wickDownColor: chartSettings?.wickDownColor || '#f23645',
       });
     }
     candleSeriesRef.current = candleSeries;
@@ -2039,6 +2056,10 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       markerPrimitiveRef.current = null;
       tradeHistoryPrimitiveRef.current = null;
       drawingManagerRef.current = null;
+      // Series were destroyed — force a full setData on next candle sync
+      syncedCountRef.current = 0;
+      syncedFirstTimeRef.current = 0;
+      syncedTailTimeRef.current = 0;
     };
   }, [onCrosshairMove, chartType]);
 
@@ -2086,20 +2107,39 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   useEffect(() => {
     if (!activeDrag) return;
 
-    const handlePointerMove = (e: PointerEvent) => {
+    // rAF throttle: pointermove can fire at 240Hz+ on high-refresh devices;
+    // coalesce to at most one setActiveDrag (and thus one overlay re-render)
+    // per animation frame.
+    let rafId: number | null = null;
+    let lastEvent: PointerEvent | null = null;
+
+    const processMove = () => {
+      rafId = null;
+      const e = lastEvent;
+      if (!e) return;
+      const nextPrice = computeDragPrice(e);
+      if (nextPrice === null) return;
+      setActiveDrag(prev => {
+        if (!prev) return null;
+        if (prev.currentPrice === nextPrice) return prev;
+        return { ...prev, currentPrice: nextPrice };
+      });
+    };
+
+    // Derives the guarded, pip-snapped price for the current drag from a
+    // pointer event. Shared by the per-frame update and the pointerup flush.
+    const computeDragPrice = (e: PointerEvent): number | null => {
       const container = containerRef.current;
       const candleSeries = candleSeriesRef.current;
-      if (!container || !candleSeries) return;
+      if (!container || !candleSeries) return null;
 
       const rect = container.getBoundingClientRect();
       const currentY = e.clientY - rect.top;
 
-      // Clamp Y between viewport boundaries
-      const clampedY = Math.max(0, Math.min(rect.height, currentY));
-
-      // Convert coordinate to price
-      const rawPrice = candleSeries.coordinateToPrice(clampedY);
-      if (rawPrice === null) return;
+      // No viewport clamping — coordinateToPrice extrapolates linearly beyond the
+      // visible pane, so dragging above/below the chart yields prices past the candles
+      const rawPrice = candleSeries.coordinateToPrice(currentY);
+      if (rawPrice === null) return null;
 
       const config = getSymbolConfig(_symbol);
       // Snap to instrument min pip size (e.g. 0.1 for Gold)
@@ -2107,7 +2147,7 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
       // Apply inversion guards & boundaries
       const position = positions.find(p => p.id === activeDrag.positionId);
-      if (!position) return;
+      if (!position) return null;
 
       let finalPrice = snappedPrice;
       const entryPrice = position.entryPrice;
@@ -2130,23 +2170,38 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         }
       }
 
-      setActiveDrag(prev => prev ? { ...prev, currentPrice: parseFloat(finalPrice.toFixed(config.digits)) } : null);
+      return parseFloat(finalPrice.toFixed(config.digits));
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      lastEvent = e;
+      if (rafId === null) {
+        rafId = requestAnimationFrame(processMove);
+      }
     };
 
     const handlePointerUp = () => {
+      // Cancel any in-flight frame and resolve the definitive drop price from
+      // the last pointer position (state may lag one frame behind).
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      const flushedPrice = lastEvent ? computeDragPrice(lastEvent) : null;
       if (activeDrag) {
+        const dropPrice = flushedPrice ?? activeDrag.currentPrice;
         // Only trigger mutation confirmation if price actually changed
-        if (activeDrag.currentPrice !== activeDrag.startPrice) {
+        if (dropPrice !== activeDrag.startPrice) {
           setPendingMutation({
             positionId: activeDrag.positionId,
             type: activeDrag.type,
-            price: activeDrag.currentPrice,
+            price: dropPrice,
           });
         }
         setActiveDrag(null);
       }
 
-      // Re-enable chart scale and scroll
+      // Re-enable chart scale and scroll (full options, incl. price-axis drag zoom)
       chartRef.current?.applyOptions({
         handleScroll: {
           mouseWheel: true,
@@ -2157,6 +2212,14 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         handleScale: {
           mouseWheel: true,
           pinch: true,
+          axisPressedMouseMove: {
+            time: true,
+            price: true,
+          },
+          axisDoubleClickReset: {
+            time: true,
+            price: true,
+          },
         }
       });
     };
@@ -2165,10 +2228,63 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     window.addEventListener('pointerup', handlePointerUp);
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
   }, [activeDrag, positions, _symbol]);
+
+  // Live update chart settings (colors, grid lines, background, crosshair)
+  useEffect(() => {
+    if (!chartRef.current || !candleSeriesRef.current || !chartSettings) return;
+    const chart = chartRef.current;
+    const candleSeries = candleSeriesRef.current;
+
+    chart.applyOptions({
+      layout: {
+        background: { color: chartSettings.backgroundColor || '#ffffff' },
+        textColor: chartSettings.scalesTextColor || '#131722',
+        fontSize: chartSettings.scalesFontSize || 12,
+      },
+      grid: {
+        vertLines: {
+          color: chartSettings.showVertGridLines !== false ? (chartSettings.vertGridColor || '#f0f3fa') : 'transparent',
+          style: chartSettings.vertGridStyle === 'dashed' ? LineStyle.Dashed : chartSettings.vertGridStyle === 'dotted' ? LineStyle.Dotted : LineStyle.Solid,
+        },
+        horzLines: {
+          color: chartSettings.showHorzGridLines !== false ? (chartSettings.horzGridColor || '#f0f3fa') : 'transparent',
+          style: chartSettings.horzGridStyle === 'dashed' ? LineStyle.Dashed : chartSettings.horzGridStyle === 'dotted' ? LineStyle.Dotted : LineStyle.Solid,
+        },
+      },
+      crosshair: {
+        vertLine: {
+          color: chartSettings.crosshairColor || '#787b86',
+          style: chartSettings.crosshairStyle === 'dashed' ? LineStyle.Dashed : chartSettings.crosshairStyle === 'dotted' ? LineStyle.Dotted : LineStyle.Solid,
+        },
+        horzLine: {
+          color: chartSettings.crosshairColor || '#787b86',
+          style: chartSettings.crosshairStyle === 'dashed' ? LineStyle.Dashed : chartSettings.crosshairStyle === 'dotted' ? LineStyle.Dotted : LineStyle.Solid,
+        },
+      },
+      rightPriceScale: {
+        borderColor: chartSettings.scalesLinesColor || '#e0e3eb',
+      },
+      timeScale: {
+        borderColor: chartSettings.scalesLinesColor || '#e0e3eb',
+      },
+    });
+
+    if (chartType === 'Candles' || !chartType) {
+      candleSeries.applyOptions({
+        upColor: chartSettings.candleUpColor || '#089981',
+        downColor: chartSettings.candleDownColor || '#f23645',
+        borderUpColor: chartSettings.borderUpColor || '#089981',
+        borderDownColor: chartSettings.borderDownColor || '#f23645',
+        wickUpColor: chartSettings.wickUpColor || '#089981',
+        wickDownColor: chartSettings.wickDownColor || '#f23645',
+      });
+    }
+  }, [chartSettings, chartType]);
 
   // Sync Timeframe-specific visibility filter
   useEffect(() => {
@@ -2398,10 +2514,8 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     // Filter out preview drawing for comparison
     const managerDrawings = manager.exportDrawings().filter(d => d.id !== 'preview');
-    const propsDrawingsJson = JSON.stringify(drawings || []);
-    const managerDrawingsJson = JSON.stringify(managerDrawings);
 
-    if (propsDrawingsJson !== managerDrawingsJson) {
+    if (!drawingsShallowEqual(drawings || [], managerDrawings)) {
       try {
         const prevSelectedId = selectedDrawingId;
         manager.clearAll();
@@ -2476,43 +2590,69 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       volumeSeries.setData([]);
       markerPrimitiveRef.current?.setMarkers([]);
       dataSignatureRef.current = '';
+      syncedCountRef.current = 0;
+      syncedFirstTimeRef.current = 0;
+      syncedTailTimeRef.current = 0;
       return;
     }
 
-    // Convert CandleData to series format
-    let chartCandles: any[];
-    if (chartType === 'HeikinAshi') {
-      const haData = computeHeikinAshi(candles);
-      chartCandles = haData.map((c: any) => ({
+    // Convert a single candle to the active series format
+    const toSeriesBar = (c: CandleData): any => {
+      if (chartType === 'Line' || chartType === 'Area') {
+        return { time: c.time as UTCTimestamp, value: c.close };
+      }
+      return {
         time: c.time as UTCTimestamp,
         open: c.open,
         high: c.high,
         low: c.low,
         close: c.close,
-      }));
-    } else if (chartType === 'Line' || chartType === 'Area') {
-      chartCandles = candles.map((c) => ({
-        time: c.time as UTCTimestamp,
-        value: c.close,
-      }));
-    } else {
-      chartCandles = candles.map((c) => ({
-        time: c.time as UTCTimestamp,
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }));
-    }
-
-    const volumeData = candles.map((c) => ({
+      };
+    };
+    const toVolumeBar = (c: CandleData): any => ({
       time: c.time as UTCTimestamp,
       value: c.volume || 0,
       color: c.close >= c.open ? 'rgba(0, 230, 118, 0.25)' : 'rgba(255, 61, 0, 0.25)',
-    }));
+    });
 
-    candleSeries.setData(chartCandles);
-    volumeSeries.setData(volumeData);
+    // Incremental replay path: when the new candle array extends the previously
+    // synced one (same start, same bar at the old tail index), push only the
+    // new/changed tail bars with series.update() instead of re-feeding the full
+    // dataset with setData() — setData on every tick is the classic cause of
+    // replay lag. Heikin Ashi recomputes its transform (pure math, cheap) but
+    // still only updates the tail bars on the series.
+    const prevCount = syncedCountRef.current;
+    const canIncrement =
+      prevCount > 0 &&
+      candles.length >= prevCount &&
+      candles.length - prevCount <= 10 &&
+      candles[0].time === syncedFirstTimeRef.current &&
+      candles[prevCount - 1].time === syncedTailTimeRef.current;
+
+    if (canIncrement) {
+      const haData = chartType === 'HeikinAshi' ? computeHeikinAshi(candles) : null;
+      // Re-update from the previous tail bar (it may have been a partial edge
+      // candle) through the newly appended bars.
+      for (let i = prevCount - 1; i < candles.length; i++) {
+        const source = haData ? haData[i] : candles[i];
+        candleSeries.update(toSeriesBar(source as CandleData));
+        volumeSeries.update(toVolumeBar(candles[i]));
+      }
+    } else {
+      // Full re-sync (session load, timeframe switch, step backward, jump)
+      let chartCandles: any[];
+      if (chartType === 'HeikinAshi') {
+        chartCandles = computeHeikinAshi(candles).map((c: any) => toSeriesBar(c));
+      } else {
+        chartCandles = candles.map(toSeriesBar);
+      }
+      candleSeries.setData(chartCandles);
+      volumeSeries.setData(candles.map(toVolumeBar));
+    }
+
+    syncedCountRef.current = candles.length;
+    syncedFirstTimeRef.current = candles[0].time;
+    syncedTailTimeRef.current = candles[candles.length - 1].time;
 
     // Build a compact signature: firstTime_lastTime_count
     const newSignature = `${candles[0].time}_${candles[candles.length - 1].time}_${candles.length}`;
@@ -2533,33 +2673,38 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       dataSignatureRef.current = newSignature;
     }
 
-    // Apply markers if any
-    if (markers && markers.length > 0) {
-      // Filter out trade entry/exit markers to prevent collision with custom primitive
-      const filteredMarkers = markers.filter((m) => {
-        // Keep "Replay Start" always
-        if (m.text === 'Replay Start') return true;
-        // Hide other trade history markers since they are rendered via the custom primitive
-        return false;
-      });
+    // Apply markers only when the markers prop identity actually changed —
+    // this effect reruns on every candle tick, but markers only change when a
+    // trade opens/closes.
+    if (lastSyncedMarkersRef.current !== markers) {
+      lastSyncedMarkersRef.current = markers;
+      if (markers && markers.length > 0) {
+        // Filter out trade entry/exit markers to prevent collision with custom primitive
+        const filteredMarkers = markers.filter((m) => {
+          // Keep "Replay Start" always
+          if (m.text === 'Replay Start') return true;
+          // Hide other trade history markers since they are rendered via the custom primitive
+          return false;
+        });
 
-      // Ensure markers are sorted by time
-      const sortedMarkers = [...filteredMarkers]
-        .sort((a, b) => a.time - b.time)
-        .map((m) => ({
-          time: m.time as UTCTimestamp,
-          position: m.position,
-          color: m.color,
-          shape: m.shape,
-          text: m.text,
-        }));
-      
-      if (markerPrimitiveRef.current) {
-        markerPrimitiveRef.current.setMarkers(sortedMarkers);
-      }
-    } else {
-      if (markerPrimitiveRef.current) {
-        markerPrimitiveRef.current.setMarkers([]);
+        // Ensure markers are sorted by time
+        const sortedMarkers = [...filteredMarkers]
+          .sort((a, b) => a.time - b.time)
+          .map((m) => ({
+            time: m.time as UTCTimestamp,
+            position: m.position,
+            color: m.color,
+            shape: m.shape,
+            text: m.text,
+          }));
+
+        if (markerPrimitiveRef.current) {
+          markerPrimitiveRef.current.setMarkers(sortedMarkers);
+        }
+      } else {
+        if (markerPrimitiveRef.current) {
+          markerPrimitiveRef.current.setMarkers([]);
+        }
       }
     }
   }, [candles, markers, chartType, sessionKey, showTradeHistory]);
@@ -2578,6 +2723,32 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
     const currentSeriesMap = indicatorSeriesRef.current;
     const activeIds = new Set((activeIndicators || []).map((ind) => ind.id));
+
+    // Detect the incremental replay tick: candles extended in place and the
+    // indicator config is untouched. In that case each plot only changes at
+    // its tail, so we push those points with series.update() instead of
+    // re-feeding the whole plot with setData() every tick.
+    const prevSync = indicatorCandlePrevRef.current;
+    const sameIndicators = prevIndicatorsIdentityRef.current === activeIndicators;
+    const appendedCount = candles.length - prevSync.count;
+    const isIncrementalTick =
+      sameIndicators &&
+      prevSync.count > 0 &&
+      appendedCount >= 0 &&
+      appendedCount <= 10 &&
+      candles[0].time === prevSync.firstTime &&
+      candles[prevSync.count - 1]?.time === prevSync.tailTime;
+
+    // Push tail points (previous tail bar may be a partial candle, so always
+    // re-update it too) or fall back to a full setData re-sync.
+    const syncPlot = (series: ISeriesApi<any>, data: any[]) => {
+      if (isIncrementalTick && data.length > 0) {
+        const tail = data.slice(-(appendedCount + 1));
+        for (const p of tail) series.update(p);
+      } else {
+        series.setData(data);
+      }
+    };
 
     // 1. Remove series for indicators that are no longer active
     for (const [id, seriesList] of currentSeriesMap.entries()) {
@@ -2601,21 +2772,24 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     const volumeHeight = 0.08; // 8% height for volume
     const bottomSpace = volumeHeight + N * panelHeight;
 
-    // Apply scale margins to main right price scale
-    chart.priceScale('right').applyOptions({
-      scaleMargins: {
-        top: 0.05,
-        bottom: bottomSpace,
-      },
-    });
+    // Scale margins only depend on the indicator set — skip on candle ticks
+    if (!isIncrementalTick) {
+      // Apply scale margins to main right price scale
+      chart.priceScale('right').applyOptions({
+        scaleMargins: {
+          top: 0.05,
+          bottom: bottomSpace,
+        },
+      });
 
-    // Apply scale margins to volume scale
-    chart.priceScale('volume-scale').applyOptions({
-      scaleMargins: {
-        top: 1.0 - bottomSpace,
-        bottom: N * panelHeight,
-      },
-    });
+      // Apply scale margins to volume scale
+      chart.priceScale('volume-scale').applyOptions({
+        scaleMargins: {
+          top: 1.0 - bottomSpace,
+          bottom: N * panelHeight,
+        },
+      });
+    }
 
     // Helper to extract and filter non-null plot data
     const getPlotData = (plots: any, plotId: string) => {
@@ -2728,15 +2902,15 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
       // Populate series data
       if (['SMA', 'EMA', 'WMA', 'HMA', 'ALMA', 'DEMA', 'TEMA', 'LSMA', 'VWMA', 'ATR', 'RSI', 'CCI', 'OBV', 'MFI', 'ADX', 'WilliamsPercentRange', 'ChaikinMF', 'Momentum', 'ROC', 'ParabolicSAR'].includes(indicator.type)) {
-        seriesList[0].setData(getPlotData(res.plots, 'plot0'));
+        syncPlot(seriesList[0], getPlotData(res.plots, 'plot0'));
       } else if (['BollingerBands', 'DonchianChannels'].includes(indicator.type)) {
-        seriesList[0].setData(getPlotData(res.plots, 'plot0')); // Basis
-        seriesList[1].setData(getPlotData(res.plots, 'plot1')); // Upper
-        seriesList[2].setData(getPlotData(res.plots, 'plot2')); // Lower
+        syncPlot(seriesList[0], getPlotData(res.plots, 'plot0')); // Basis
+        syncPlot(seriesList[1], getPlotData(res.plots, 'plot1')); // Upper
+        syncPlot(seriesList[2], getPlotData(res.plots, 'plot2')); // Lower
       } else if (indicator.type === 'KeltnerChannels') {
-        seriesList[0].setData(getPlotData(res.plots, 'plot0')); // Upper
-        seriesList[1].setData(getPlotData(res.plots, 'plot1')); // Basis
-        seriesList[2].setData(getPlotData(res.plots, 'plot2')); // Lower
+        syncPlot(seriesList[0], getPlotData(res.plots, 'plot0')); // Upper
+        syncPlot(seriesList[1], getPlotData(res.plots, 'plot1')); // Basis
+        syncPlot(seriesList[2], getPlotData(res.plots, 'plot2')); // Lower
       } else if (indicator.type === 'MACD') {
         const rawHist = res.plots.plot0 || [];
         const histData = rawHist.map((p: any) => ({
@@ -2744,20 +2918,28 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
           value: typeof p.value === 'number' && !isNaN(p.value) ? p.value : 0,
           color: p.color || '#26A69A',
         }));
-        seriesList[0].setData(histData); // Histogram
-        seriesList[1].setData(getPlotData(res.plots, 'plot1')); // MACD
-        seriesList[2].setData(getPlotData(res.plots, 'plot2')); // Signal
+        syncPlot(seriesList[0], histData); // Histogram
+        syncPlot(seriesList[1], getPlotData(res.plots, 'plot1')); // MACD
+        syncPlot(seriesList[2], getPlotData(res.plots, 'plot2')); // Signal
       } else if (['Stochastic', 'Supertrend', 'Aroon'].includes(indicator.type)) {
-        seriesList[0].setData(getPlotData(res.plots, 'plot0'));
-        seriesList[1].setData(getPlotData(res.plots, 'plot1'));
+        syncPlot(seriesList[0], getPlotData(res.plots, 'plot0'));
+        syncPlot(seriesList[1], getPlotData(res.plots, 'plot1'));
       } else if (indicator.type === 'IchimokuCloud') {
-        seriesList[0].setData(getPlotData(res.plots, 'plot0')); // Conversion Line
-        seriesList[1].setData(getPlotData(res.plots, 'plot1')); // Base Line
-        seriesList[2].setData(getPlotData(res.plots, 'plot2')); // Lagging Span
-        seriesList[3].setData(getPlotData(res.plots, 'plot3')); // Leading Span A
-        seriesList[4].setData(getPlotData(res.plots, 'plot4')); // Leading Span B
+        syncPlot(seriesList[0], getPlotData(res.plots, 'plot0')); // Conversion Line
+        syncPlot(seriesList[1], getPlotData(res.plots, 'plot1')); // Base Line
+        syncPlot(seriesList[2], getPlotData(res.plots, 'plot2')); // Lagging Span
+        syncPlot(seriesList[3], getPlotData(res.plots, 'plot3')); // Leading Span A
+        syncPlot(seriesList[4], getPlotData(res.plots, 'plot4')); // Leading Span B
       }
     }
+
+    // Record what the series now hold for the next incremental check
+    indicatorCandlePrevRef.current = {
+      count: candles.length,
+      firstTime: candles[0].time,
+      tailTime: candles[candles.length - 1].time,
+    };
+    prevIndicatorsIdentityRef.current = activeIndicators;
   }, [candles, activeIndicators]);
 
   // Sync Position Lines (Entry, SL, TP)
@@ -2994,9 +3176,9 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 - **Trade Status:** ${status}
 - **Trade Duration:** ${durationBars} bars
 
-#### ðŸ§  Psychology Log
+#### Psychology Log
 - **Emotion:** ${psychology.emotion}
-- **Confidence:** ${'â˜…'.repeat(psychology.confidence)}${'â˜†'.repeat(5 - psychology.confidence)}
+- **Confidence:** ${'*'.repeat(psychology.confidence)}${'.'.repeat(5 - psychology.confidence)}
 - **Rule Followed:** ${psychology.ruleFollowed ? 'Yes' : 'No'}
 - **FOMO:** ${psychology.fomo ? 'Yes' : 'No'}
 - **Revenge Trade:** ${psychology.revengeTrade ? 'Yes' : 'No'}
@@ -3005,14 +3187,14 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 ${mistakesList ? `\n- **Mistakes Made:**\n${mistakesList}` : ''}
 ${psychology.lessons ? `\n- **Lessons Learned:**\n${psychology.lessons}` : ''}
 
-#### ðŸŽ¯ Confirmation Checklist
+#### Confirmation Checklist
 ${listItems || '  - None selected'}
 
-#### ðŸ“ Notes
+#### Notes
 ${notes || 'No notes added.'}`;
 
       navigator.clipboard.writeText(template);
-      alert('Journal template copied to clipboard!');
+      toast.success('Journal template copied to clipboard!');
     };
 
     return (
@@ -3023,14 +3205,14 @@ ${notes || 'No notes added.'}`;
             onClick={() => setIsPanelMinimized(false)}
             title="Expand Position Panel"
           >
-            ðŸ“Š
+            P
           </button>
         ) : (
           <>
             {/* Panel Header */}
             <div className={styles.positionPanelHeader}>
               <div className={styles.panelTitle}>
-                <span>{isLong ? 'ðŸŸ¢ Long Position' : 'ðŸ”´ Short Position'}</span>
+                <span style={{ color: isLong ? '#089981' : '#f23645' }}>{isLong ? 'Long Position' : 'Short Position'}</span>
                 <span className={styles.smallId}>#{drawing.id.substring(0, 6)}</span>
               </div>
               <div className={styles.headerActions}>
@@ -3039,7 +3221,7 @@ ${notes || 'No notes added.'}`;
                   onClick={() => setIsPanelMinimized(true)}
                   title="Minimize"
                 >
-                  âž–
+                  +
                 </button>
                 <button 
                   className={styles.closeBtn} 
@@ -3050,7 +3232,7 @@ ${notes || 'No notes added.'}`;
                   }}
                   title="Close Panel"
                 >
-                  âœ–
+                  -
                 </button>
               </div>
             </div>
@@ -3061,25 +3243,25 @@ ${notes || 'No notes added.'}`;
                 className={`${styles.tabBtn} ${activePanelTab === 'stats' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('stats')}
               >
-                ðŸ“Š Size & Stats
+                Size & Stats
               </button>
               <button 
                 className={`${styles.tabBtn} ${activePanelTab === 'targets' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('targets')}
               >
-                ðŸŽ¯ Targets
+                Targets
               </button>
               <button 
                 className={`${styles.tabBtn} ${activePanelTab === 'journal' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('journal')}
               >
-                ðŸ““ Journal
+                Journal
               </button>
               <button 
                 className={`${styles.tabBtn} ${activePanelTab === 'appearance' ? styles.tabBtnActive : ''}`}
                 onClick={() => setActivePanelTab('appearance')}
               >
-                ðŸŽ¨ Style
+                Style
               </button>
             </div>
 
@@ -3379,11 +3561,11 @@ ${notes || 'No notes added.'}`;
                           value={psychology.confidence}
                           onChange={(e) => handleUpdatePsychology('confidence', parseInt(e.target.value))}
                         >
-                          <option value="1">â­</option>
-                          <option value="2">â­â­</option>
-                          <option value="3">â­â­â­</option>
-                          <option value="4">â­â­â­â­</option>
-                          <option value="5">â­â­â­â­â­</option>
+                          <option value="1">*</option>
+                          <option value="2">**</option>
+                          <option value="3">***</option>
+                          <option value="4">****</option>
+                          <option value="5">*****</option>
                         </select>
                       </div>
                     </div>
@@ -3535,7 +3717,7 @@ ${notes || 'No notes added.'}`;
                       Copy a beautifully-formatted markdown summary of this trade to paste directly into your journal sheet.
                     </p>
                     <button className={styles.actionBtn} onClick={copyJournalTemplate}>
-                      ðŸ“‹ Copy Markdown Journal
+                      Copy Markdown Journal
                     </button>
                   </div>
                 </>
@@ -3687,7 +3869,7 @@ ${notes || 'No notes added.'}`;
                   </g>
                 )}
 
-                {/* Entry line â€” solid blue, NOT draggable */}
+                {/* Entry line - solid blue, NOT draggable */}
                 {yEntry !== null && (
                   <line x1={0} y1={yEntry} x2={w} y2={yEntry}
                     stroke="#2962ff" strokeWidth={2} />
@@ -3709,7 +3891,7 @@ ${notes || 'No notes added.'}`;
 
           return (
             <div key={`pills-${pos.id}`}>
-              {/* â•â•â• ENTRY PILL â•â•â• */}
+              {/* === ENTRY PILL === */}
               {yEntry !== null && (
                 <div
                   className={`${styles.posControlPill} ${styles.posControlPillEntry}`}
@@ -3730,7 +3912,7 @@ ${notes || 'No notes added.'}`;
 
                   <span className={styles.posPillBadge}
                     style={{ background: isBuy ? '#2962ff' : '#f23645', color: '#fff', padding: '1px 6px' }}>
-                    â—€â–¶ {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
+                    {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
                   </span>
 
                   <span style={{ color: currentPnL >= 0 ? '#10b981' : '#f43f5e', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' }}>
@@ -3738,11 +3920,15 @@ ${notes || 'No notes added.'}`;
                   </span>
 
                   <button className={styles.posActionButton}
-                    style={{ color: '#94a3b8', fontSize: '12px' }} title="Close position">âœ•</button>
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClosePosition?.(pos.id);
+                    }}
+                    style={{ color: '#94a3b8', fontSize: '12px' }} title="Close position">x</button>
                 </div>
               )}
 
-              {/* â•â•â• TP PILL â•â•â• */}
+              {/* === TP PILL === */}
               {yTP !== null && tpPrice != null && (
                 <div
                   className={`${styles.posControlPill} ${styles.posControlPillTP}`}
@@ -3759,7 +3945,7 @@ ${notes || 'No notes added.'}`;
 
                   <span className={styles.posPillBadge}
                     style={{ background: '#089981', color: '#fff', padding: '1px 6px' }}>
-                    â—€â–¶ {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
+                    {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
                   </span>
 
                   <span style={{ color: '#10b981', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' }}>
@@ -3767,11 +3953,11 @@ ${notes || 'No notes added.'}`;
                   </span>
 
                   <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'tp')}
-                    style={{ color: '#f23645', fontSize: '12px' }} title="Remove TP">âœ•</button>
+                    style={{ color: '#f23645', fontSize: '12px' }} title="Remove TP">x</button>
                 </div>
               )}
 
-              {/* â•â•â• SL PILL â•â•â• */}
+              {/* === SL PILL === */}
               {ySL !== null && slPrice != null && (
                 <div
                   className={`${styles.posControlPill} ${styles.posControlPillSL}`}
@@ -3788,7 +3974,7 @@ ${notes || 'No notes added.'}`;
 
                   <span className={styles.posPillBadge}
                     style={{ background: '#f23645', color: '#fff', padding: '1px 6px' }}>
-                    â—€â–¶ {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
+                    {pos.lotSize >= 1 ? pos.lotSize.toFixed(0) : pos.lotSize.toFixed(2)}
                   </span>
 
                   <span style={{ color: '#f43f5e', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' }}>
@@ -3796,7 +3982,7 @@ ${notes || 'No notes added.'}`;
                   </span>
 
                   <button className={styles.posActionButton} onClick={() => handleRemoveLevel(pos, 'sl')}
-                    style={{ color: '#f23645', fontSize: '12px' }} title="Remove SL">âœ•</button>
+                    style={{ color: '#f23645', fontSize: '12px' }} title="Remove SL">x</button>
                 </div>
               )}
             </div>
@@ -3854,6 +4040,39 @@ ${notes || 'No notes added.'}`;
 
       {/* Chart-Based Position Management Tool Overlay */}
       {showTradeLevels && renderPositionManagerOverlay()}
+
+      {/* Top-Left Trading Widget Overlay (Screenshot 1) */}
+      {chartSettings?.showBuySellButtons !== false && candles.length > 0 && (
+        <div className={styles.topLeftTradingWidget}>
+          <div className={styles.buySellGroup}>
+            <button
+              className={styles.tradeBtnSell}
+              onClick={() => onPlaceTrade?.('SELL')}
+              title="Sell Market Order"
+            >
+              <span>SELL</span>
+              <span style={{ fontSize: '10px', opacity: 0.9 }}>
+                {formatPrice(candles[candles.length - 1].close, _symbol)}
+              </span>
+            </button>
+
+            <span className={styles.spreadBadge}>
+              {getSymbolConfig(_symbol).pipSize >= 0.01 ? '87' : '12'}
+            </span>
+
+            <button
+              className={styles.tradeBtnBuy}
+              onClick={() => onPlaceTrade?.('BUY')}
+              title="Buy Market Order"
+            >
+              <span>BUY</span>
+              <span style={{ fontSize: '10px', opacity: 0.9 }}>
+                {formatPrice(candles[candles.length - 1].close, _symbol)}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Position Tool Panel */}
       {isPositionTool && renderPositionToolPanel(selectedDrawing)}

@@ -1,0 +1,78 @@
+/* ============================================
+   Tailwind CSS v4 — token bridge
+   Coexists with the CSS Modules design system.
+   - NO preflight: existing pages must stay pixel-identical,
+     so only the theme + utilities layers are imported.
+   - Every Tailwind color/font/radius/shadow token maps to the
+     CSS variables in globals.css, which already flip with
+     [data-theme] — utilities are automatically theme-aware.
+   ============================================ */
+
+@layer theme, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* dark: variant follows next-themes' [data-theme='dark'] attribute */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@theme inline {
+  /* Disable Tailwind's default palette so components can only use tokens */
+  --color-*: initial;
+
+  /* Surfaces */
+  --color-background: var(--bg-base);
+  --color-surface: var(--bg-primary);
+  --color-surface-secondary: var(--bg-secondary);
+  --color-surface-tertiary: var(--bg-tertiary);
+  --color-card: var(--bg-card);
+  --color-card-hover: var(--bg-card-hover);
+  --color-elevated: var(--bg-elevated);
+  --color-input: var(--bg-input);
+
+  /* Text (ink hierarchy) */
+  --color-foreground: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-dim: var(--text-dim);
+  --color-disabled: var(--text-disabled);
+
+  /* Brand accent */
+  --color-accent: var(--accent);
+  --color-accent-light: var(--accent-light);
+  --color-accent-dark: var(--accent-dark);
+  --color-accent-glow: var(--accent-glow);
+
+  /* Semantic */
+  --color-profit: var(--color-profit);
+  --color-profit-bg: var(--color-profit-bg);
+  --color-loss: var(--color-loss);
+  --color-loss-bg: var(--color-loss-bg);
+  --color-warning: var(--color-warning);
+  --color-warning-bg: var(--color-warning-bg);
+  --color-info: var(--color-info);
+  --color-info-bg: var(--color-info-bg);
+
+  /* Borders */
+  --color-border: var(--border-default);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-active: var(--border-active);
+  --color-border-profit: var(--border-profit);
+  --color-border-loss: var(--border-loss);
+
+  /* Typography */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  /* Radius scale */
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  /* Shadows */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+}

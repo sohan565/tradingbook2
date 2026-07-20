@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "./tailwind.css";
 import TopNav from '@/components/layout/TopNav';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { ConfirmProvider } from '@/components/ui/ConfirmDialog';
+import Toaster from '@/components/ui/Toaster';
 
 export const metadata: Metadata = {
   title: "TradingBook — Backtesting & Trade Journal",
@@ -33,7 +36,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
         <script
@@ -71,15 +74,18 @@ export default function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
-        <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
-          <div className="app-layout">
-            <TopNav />
-            <div className="app-body">
-              <main className="app-main">
-                {children}
-              </main>
+        <ThemeProvider attribute="data-theme" defaultTheme="dark" enableSystem={false}>
+          <ConfirmProvider>
+            <div className="app-layout">
+              <TopNav />
+              <div className="app-body">
+                <main className="app-main">
+                  {children}
+                </main>
+              </div>
             </div>
-          </div>
+            <Toaster />
+          </ConfirmProvider>
         </ThemeProvider>
       </body>
     </html>

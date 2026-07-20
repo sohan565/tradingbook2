@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import type { MTAccount } from '@/types';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import styles from './accounts.module.css';
 
 export default function AccountsPage() {
@@ -13,6 +15,7 @@ export default function AccountsPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  const confirm = useConfirm();
   const [accounts, setAccounts] = useState<MTAccount[]>([]);
   const [isFetching, setIsFetching] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -21,10 +24,6 @@ export default function AccountsPage() {
   const [accountNumber, setAccountNumber] = useState<string>('');
   const [broker, setBroker] = useState<string>('');
   const [serverName, setServerName] = useState<string>('');
-
-  // UI Toast State
-  const [showToast, setShowToast] = useState<boolean>(false);
-  const [toastMsg, setToastMsg] = useState<string>('');
 
 
 
@@ -51,13 +50,6 @@ export default function AccountsPage() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Show a notification toast
-  const triggerToast = (msg: string) => {
-    setToastMsg(msg);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 3000);
-  };
-
   // Register Account
   const handleRegisterAccount = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,17 +69,17 @@ export default function AccountsPage() {
 
       const json = await res.json();
       if (json.success) {
-        triggerToast('MT5 Account linked successfully! 🔌');
+        toast.success('MT5 Account linked successfully!');
         setAccountNumber('');
         setBroker('');
         setServerName('');
         fetchAccounts();
       } else {
-        alert('Failed to register: ' + (json.error || 'Unknown error'));
+        toast.error('Failed to register: ' + (json.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('Error registering account:', err);
-      alert('Network error while registering account.');
+      toast.error('Network error while registering account.');
     } finally {
       setIsSaving(false);
     }
@@ -95,9 +87,13 @@ export default function AccountsPage() {
 
   // Delete Account
   const handleDeleteAccount = async (id: string) => {
-    if (!confirm('Are you sure you want to unlink this MT5 account? Saved trades will not be deleted, but no further syncs will occur.')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Unlink MT5 account?',
+      message: 'Saved trades will not be deleted, but no further syncs will occur.',
+      confirmLabel: 'Unlink',
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/accounts?id=${id}`, {
@@ -105,7 +101,7 @@ export default function AccountsPage() {
       });
       const json = await res.json();
       if (json.success) {
-        triggerToast('Account unlinked successfully.');
+        toast.success('Account unlinked successfully.');
         fetchAccounts();
       }
     } catch (err) {
@@ -123,7 +119,7 @@ export default function AccountsPage() {
       });
       const json = await res.json();
       if (json.success) {
-        triggerToast(!currentStatus ? 'Account activated.' : 'Account deactivated.');
+        toast.success(!currentStatus ? 'Account activated.' : 'Account deactivated.');
         fetchAccounts();
       }
     } catch (err) {
@@ -134,7 +130,7 @@ export default function AccountsPage() {
   // Copy API Key to Clipboard
   const handleCopyKey = (key: string) => {
     navigator.clipboard.writeText(key);
-    triggerToast('API Key copied to clipboard! 📋');
+    toast.success('API Key copied to clipboard!');
   };
 
   if (!mounted) {
@@ -350,12 +346,6 @@ export default function AccountsPage() {
         </main>
       </div>
 
-      {/* Alert toast notification */}
-      {showToast && (
-        <div className={styles.toastOverlay}>
-          {toastMsg}
-        </div>
-      )}
     </div>
   );
 }

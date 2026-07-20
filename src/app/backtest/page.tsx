@@ -2,18 +2,34 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import { toast } from 'sonner';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
+import Select from '@/components/ui/Select';
 import { SYMBOLS, getSymbolConfig, calculatePnL, calculatePnLPips, calculateUnrealizedPnL, calculateBacktestStats, formatCurrency, formatPips, formatPercent, formatPrice, generateId, formatDuration } from '@/lib/trade-math';
 import { normalizeChartCandles, debugLogCandles } from '@/lib/chart-engine';
-import type { CandleData, ChartMarker, OpenPosition, TradeRecord, BacktestStats, OHLCDisplay, Timeframe, TradeType } from '@/types';
+import type { CandleData, ChartMarker, OpenPosition, TradeRecord, BacktestStats, OHLCDisplay, Timeframe, TradeType, ChartSettings } from '@/types';
+import { DEFAULT_CHART_SETTINGS } from '@/types';
+import { ChartSettingsModal } from '@/components/backtest/ChartSettingsModal';
 import styles from './backtest.module.css';
 
 // Phase 2 Drawing & Indicator imports
 import type { SerializedDrawing } from 'lightweight-charts-drawing';
 import DrawingToolbar from '@/components/backtest/DrawingToolbar';
-import IndicatorPanel, { type ActiveIndicator, INDICATORS_REGISTRY } from '@/components/backtest/IndicatorPanel';
-import ObjectTreePanel from '@/components/backtest/ObjectTreePanel';
+import { INDICATORS_REGISTRY, type ActiveIndicator } from '@/components/backtest/indicator-registry';
 import { parseHistDataCSV } from '@/lib/csv-parser';
 import { aggregateCandles, TIMEFRAME_SECONDS } from '@/lib/aggregator';
+import { drawingsShallowEqual } from '@/lib/drawing-utils';
+import PlaybackControls from '@/components/backtest/panels/PlaybackControls';
+import OrderPanel from '@/components/backtest/panels/OrderPanel';
+import PositionsSidebar from '@/components/backtest/panels/PositionsSidebar';
+import OpenPositionsTable from '@/components/backtest/panels/OpenPositionsTable';
+import TradeHistoryTable from '@/components/backtest/panels/TradeHistoryTable';
+import TabsHeader from '@/components/backtest/panels/TabsHeader';
+
+// Heavy modal panels are loaded on demand — they are closed by default and
+// don't need to be in the initial route bundle.
+const IndicatorPanel = dynamic(() => import('@/components/backtest/IndicatorPanel'), { ssr: false });
+const ObjectTreePanel = dynamic(() => import('@/components/backtest/ObjectTreePanel'), { ssr: false });
 
 // Dynamic import of the Chart component to prevent SSR errors (Lightweight Charts uses window/ResizeObserver)
 const Chart = dynamic(() => import('@/components/backtest/Chart'), {
@@ -103,6 +119,7 @@ function getInitialReplayIndex(candles: CandleData[]): number {
 // ============================================
 
 export default function BacktestPage() {
+  const confirmDialog = useConfirm();
   const [mounted, setMounted] = useState<boolean>(false);
   const [isGlobalNavCollapsed, setIsGlobalNavCollapsed] = useState<boolean>(true);
   const [isTerminalHeaderCollapsed, setIsTerminalHeaderCollapsed] = useState<boolean>(false);
@@ -216,29 +233,26 @@ export default function BacktestPage() {
   const [tempTP, setTempTP] = useState<string>('');
 
   // Chart Display Settings
-  const [showTradeHistory, setShowTradeHistory] = useState<boolean>(() => {
+  const [chartSettings, setChartSettings] = useState<ChartSettings>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('tradingbook_show_trade_history');
-      return saved !== null ? saved === 'true' : true;
+      const saved = localStorage.getItem('tradingbook_chart_settings');
+      if (saved) {
+        try {
+          return { ...DEFAULT_CHART_SETTINGS, ...JSON.parse(saved) };
+        } catch (e) {
+          return DEFAULT_CHART_SETTINGS;
+        }
+      }
     }
-    return true;
-  });
-  const [showTradeLevels, setShowTradeLevels] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('tradingbook_show_trade_levels');
-      return saved !== null ? saved === 'true' : true;
-    }
-    return true;
+    return DEFAULT_CHART_SETTINGS;
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    localStorage.setItem('tradingbook_show_trade_history', String(showTradeHistory));
-  }, [showTradeHistory]);
-
-  useEffect(() => {
-    localStorage.setItem('tradingbook_show_trade_levels', String(showTradeLevels));
-  }, [showTradeLevels]);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tradingbook_chart_settings', JSON.stringify(chartSettings));
+    }
+  }, [chartSettings]);
 
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number } | null>(null);
@@ -269,15 +283,6 @@ export default function BacktestPage() {
 
   // Sync refs with state to use in event loops without stale state
   useEffect(() => { visibleCandlesRef.current = visibleCandles; }, [visibleCandles]);
-  useEffect(() => {
-    if (visibleCandles.length > 0) {
-      console.log('[UI] visibleCandles updated:', visibleCandles.length, 'candles', {
-        first: visibleCandles[0],
-        last: visibleCandles[visibleCandles.length - 1],
-      });
-      debugLogCandles(visibleCandles, 'visibleCandles rendered');
-    }
-  }, [visibleCandles]);
   useEffect(() => { openPositionsRef.current = openPositions; }, [openPositions]);
   useEffect(() => { closedTradesRef.current = closedTrades; }, [closedTrades]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
@@ -441,7 +446,10 @@ export default function BacktestPage() {
     }
   };
 
-  const autoSave = async (
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingAutoSaveRef = useRef<(() => Promise<void>) | null>(null);
+
+  const performAutoSave = async (
     bal: number,
     idx: number,
     openPos: OpenPosition[],
@@ -474,6 +482,49 @@ export default function BacktestPage() {
       console.error('Auto-save failed:', err);
     }
   };
+
+  // Debounced auto-save: serializing positions/trades/markers/drawings with
+  // JSON.stringify on every candle step stutters the replay. Rapid calls
+  // collapse into one trailing save with the latest snapshot (800ms quiet
+  // period). Saves that include full candle data (session/timeframe changes)
+  // flush immediately since they must not be lost or coalesced away.
+  const autoSave = (
+    bal: number,
+    idx: number,
+    openPos: OpenPosition[],
+    closedT: TradeRecord[],
+    tf: Timeframe,
+    mkrs: ChartMarker[],
+    candles?: CandleData[]
+  ) => {
+    if (candles) {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+      pendingAutoSaveRef.current = null;
+      void performAutoSave(bal, idx, openPos, closedT, tf, mkrs, candles);
+      return;
+    }
+    pendingAutoSaveRef.current = () => performAutoSave(bal, idx, openPos, closedT, tf, mkrs);
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSaveTimerRef.current = null;
+      const run = pendingAutoSaveRef.current;
+      pendingAutoSaveRef.current = null;
+      if (run) void run();
+    }, 800);
+  };
+
+  // Flush any pending debounced save on unmount so progress isn't lost
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      const run = pendingAutoSaveRef.current;
+      pendingAutoSaveRef.current = null;
+      if (run) void run();
+    };
+  }, []);
 
 
   const handleSaveSession = async () => {
@@ -572,7 +623,7 @@ export default function BacktestPage() {
       setSessionStatus('active');
     } catch (err: any) {
       console.error('Error resuming session:', err);
-      alert(`Error resuming session: ${err.message}`);
+      toast.error(`Error resuming session: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -580,7 +631,13 @@ export default function BacktestPage() {
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
-    if (!confirm('Are you sure you want to delete this saved session?')) return;
+    const ok = await confirmDialog({
+      title: 'Delete saved session?',
+      message: 'This will permanently remove the session and its saved progress.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`/api/backtest/sessions/${sessionId}`, {
         method: 'DELETE',
@@ -592,7 +649,7 @@ export default function BacktestPage() {
           handleEndSession();
         }
       } else {
-        alert(json.error || 'Failed to delete session');
+        toast.error(json.error || 'Failed to delete session');
       }
     } catch (err) {
       console.error('Error deleting session:', err);
@@ -644,7 +701,7 @@ export default function BacktestPage() {
       } else {
         // Parse uploaded CSV
         if (!uploadedFile) {
-          alert('Please upload a CSV file first.');
+          toast.info('Please upload a CSV file first.');
           setIsLoading(false);
           return;
         }
@@ -658,7 +715,7 @@ export default function BacktestPage() {
         debugLogCandles(m1Candles, 'Parsed M1 candles');
         
         if (m1Candles.length === 0) {
-          alert('No valid candle data found in the CSV file. Please check the format.');
+          toast.error('No valid candle data found in the CSV file. Please check the format.');
           setIsLoading(false);
           return;
         }
@@ -674,7 +731,7 @@ export default function BacktestPage() {
 
       if (candles.length === 0) {
         console.error('[BacktestEngine] No candles after processing');
-        alert('No candle data received. Please check your date range or data source.');
+        toast.error('No candle data received. Please check your date range or data source.');
         setIsLoading(false);
         return;
       }
@@ -736,7 +793,7 @@ export default function BacktestPage() {
       fetchSessions();
     } catch (err) {
       console.error('[BacktestEngine] Error launching session:', err);
-      alert(`Error launching session: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      toast.error(`Error launching session: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -752,7 +809,7 @@ export default function BacktestPage() {
           finalCsvPath = localCsvPath.trim();
         } else {
           if (!uploadedFile) {
-            alert('Please select a CSV file or enter local path first.');
+            toast.info('Please select a CSV file or enter local path first.');
             setIsLoading(false);
             return;
           }
@@ -789,7 +846,7 @@ export default function BacktestPage() {
           // Fallback if no date selected
           finalCsvPath = `data/histdata/${selectedSymbol.toLowerCase()}/2026_05.csv`;
         }
-        alert(`Launching with server file at path: ${finalCsvPath}. Make sure it is pre-loaded.`);
+        toast.info(`Launching with server file at path: ${finalCsvPath}. Make sure it is pre-loaded.`);
       }
 
       // Create session in DB first
@@ -836,13 +893,13 @@ export default function BacktestPage() {
         throw new Error(runJson.error || 'Failed to run Python aggregation.');
       }
 
-      alert('Python engine successfully parsed and aggregated the CSV file! Loading chart...');
+      toast.success('Python engine successfully parsed and aggregated the CSV file! Loading chart...');
       
       // Auto transition Next.js to resume this session so they can see live synced progress!
       handleResumeSession(dbSession.id);
     } catch (err: any) {
       console.error(err);
-      alert(`Error starting Python Engine: ${err.message}`);
+      toast.error(`Error starting Python Engine: ${err.message}`);
     } finally {
       setIsLoading(false);
     }
@@ -937,7 +994,7 @@ export default function BacktestPage() {
         setDrawingsHistory(prev => {
           const truncated = prev.slice(0, historyIndexRef.current + 1);
           const last = truncated[truncated.length - 1];
-          if (last && JSON.stringify(last) === JSON.stringify(drawingsRef.current)) {
+          if (last && drawingsShallowEqual(last, drawingsRef.current)) {
             hasPendingHistoryPushRef.current = false;
             return prev;
           }
@@ -955,7 +1012,7 @@ export default function BacktestPage() {
   const handleDrawingChange = (nextDrawings: SerializedDrawing[]) => {
     // If undoing/redoing or updating options, check if they are identical to index
     const activeHist = drawingsHistory[historyIndex];
-    if (activeHist && JSON.stringify(activeHist) === JSON.stringify(nextDrawings)) {
+    if (activeHist && drawingsShallowEqual(activeHist, nextDrawings)) {
       setDrawings(nextDrawings);
       drawingsRef.current = nextDrawings;
       return;
@@ -997,8 +1054,14 @@ export default function BacktestPage() {
     handleDrawingChange(nextDrawings);
   };
 
-  const handleClearDrawings = () => {
-    if (!confirm('Are you sure you want to clear all drawings?')) return;
+  const handleClearDrawings = async () => {
+    const ok = await confirmDialog({
+      title: 'Clear all drawings?',
+      message: 'Every drawing on this chart will be removed. This can be undone with Ctrl+Z.',
+      confirmLabel: 'Clear all',
+      danger: true,
+    });
+    if (!ok) return;
     chartComponentRef.current?.clearDrawings();
     
     const nextDrawings: SerializedDrawing[] = [];
@@ -1229,32 +1292,39 @@ export default function BacktestPage() {
   const unrealizedPnLTotal = openPositions.reduce((sum, pos) => sum + pos.unrealizedPnl, 0);
   const equity = balance + unrealizedPnLTotal;
 
-  // Sync positions live price updates when visible candles change
+  // Sync positions live price updates when visible candles change.
+  // stepForward already stamps fresh unrealized PnL on each tick, so this
+  // effect only fires a state update when values actually differ (e.g. after
+  // jump-to-bar or timeframe switches) — otherwise it bails out with `prev`
+  // and no re-render happens.
   useEffect(() => {
     if (visibleCandles.length === 0 || openPositionsRef.current.length === 0) return;
     const currentClose = visibleCandles[visibleCandles.length - 1].close;
 
-    const timer = setTimeout(() => {
-      setOpenPositions(prev => {
-        if (prev.length === 0) return prev;
-        return prev.map(pos => {
-          const { pnl, pips } = calculateUnrealizedPnL(
-            pos.entryPrice,
-            currentClose,
-            pos.lotSize,
-            pos.type,
-            pos.symbol
-          );
-          return {
-            ...pos,
-            currentPrice: currentClose,
-            unrealizedPnl: pnl,
-            unrealizedPips: pips,
-          };
-        });
+    setOpenPositions(prev => {
+      if (prev.length === 0) return prev;
+      let changed = false;
+      const next = prev.map(pos => {
+        const { pnl, pips } = calculateUnrealizedPnL(
+          pos.entryPrice,
+          currentClose,
+          pos.lotSize,
+          pos.type,
+          pos.symbol
+        );
+        if (pos.currentPrice === currentClose && pos.unrealizedPnl === pnl && pos.unrealizedPips === pips) {
+          return pos;
+        }
+        changed = true;
+        return {
+          ...pos,
+          currentPrice: currentClose,
+          unrealizedPnl: pnl,
+          unrealizedPips: pips,
+        };
       });
-    }, 0);
-    return () => clearTimeout(timer);
+      return changed ? next : prev;
+    });
   }, [visibleCandles.length]);
 
   // Execute Step Forward
@@ -1379,7 +1449,9 @@ export default function BacktestPage() {
       setMarkers(nextMkrs);
     }
 
-    setOpenPositions(nextOpenPositions);
+    if (currentPositions.length > 0) {
+      setOpenPositions(nextOpenPositions);
+    }
     setVisibleCandles(candlesList.slice(0, nextIndex + 1));
     setCurrentIndex(nextIndex);
 
@@ -1512,11 +1584,12 @@ export default function BacktestPage() {
 
 
   // Reset backtest session
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setIsPlaying(false);
-    if (allCandles.length > 0) {
-      const resetIndex = getInitialReplayIndex(allCandles);
-      const resetVisible = allCandles.slice(0, resetIndex + 1);
+    const candlesList = allCandlesRef.current;
+    if (candlesList.length > 0) {
+      const resetIndex = getInitialReplayIndex(candlesList);
+      const resetVisible = candlesList.slice(0, resetIndex + 1);
       setVisibleCandles(resetVisible);
       setCurrentIndex(resetIndex);
       setBalance(startingBalance);
@@ -1525,12 +1598,12 @@ export default function BacktestPage() {
       setMarkers([]);
 
       // Reset replay wall timestamp
-      const tfSecs = TIMEFRAME_SECONDS[timeframe] || 900;
-      setReplayTimestamp(allCandles[resetIndex].time + tfSecs - 60);
-      
-      autoSave(startingBalance, resetIndex, [], [], timeframe, []);
+      const tfSecs = TIMEFRAME_SECONDS[timeframeRef.current] || 900;
+      setReplayTimestamp(candlesList[resetIndex].time + tfSecs - 60);
+
+      autoSave(startingBalance, resetIndex, [], [], timeframeRef.current, []);
     }
-  };
+  }, [startingBalance]);
 
   // Keyboard Shortcuts handler
   useEffect(() => {
@@ -1575,14 +1648,24 @@ export default function BacktestPage() {
   }, [stepForward, stepBackward, sessionStatus, handleUndo, handleRedo, handleReset]);
 
   // Play/Pause toggler
-  const handleTogglePlay = () => {
-    setIsPlaying(!isPlaying);
-  };
+  const handleTogglePlay = useCallback(() => {
+    setIsPlaying(p => !p);
+  }, []);
+
+  const handleStepForwardManual = useCallback(() => {
+    setIsPlaying(false);
+    stepForward();
+  }, [stepForward]);
+
+  const handleToggleJumpToBar = useCallback(() => {
+    setIsJumpToBarActive(active => !active);
+  }, []);
 
   // Place Trade Order
-  const handlePlaceOrder = (type: TradeType) => {
-    if (visibleCandles.length === 0) return;
-    const currentCandle = visibleCandles[visibleCandles.length - 1];
+  const handlePlaceOrder = useCallback((type: TradeType) => {
+    const candlesList = visibleCandlesRef.current;
+    if (candlesList.length === 0) return;
+    const currentCandle = candlesList[candlesList.length - 1];
     const entryPrice = currentCandle.close;
 
     const slVal = stopLossInput ? parseFloat(stopLossInput) : undefined;
@@ -1591,21 +1674,21 @@ export default function BacktestPage() {
     // Basic Validation
     if (slVal) {
       if (type === 'BUY' && slVal >= entryPrice) {
-        alert('BUY Stop Loss must be below the Entry Price');
+        toast.error('BUY Stop Loss must be below the Entry Price');
         return;
       }
       if (type === 'SELL' && slVal <= entryPrice) {
-        alert('SELL Stop Loss must be above the Entry Price');
+        toast.error('SELL Stop Loss must be above the Entry Price');
         return;
       }
     }
     if (tpVal) {
       if (type === 'BUY' && tpVal <= entryPrice) {
-        alert('BUY Take Profit must be above the Entry Price');
+        toast.error('BUY Take Profit must be above the Entry Price');
         return;
       }
       if (type === 'SELL' && tpVal >= entryPrice) {
-        alert('SELL Take Profit must be below the Entry Price');
+        toast.error('SELL Take Profit must be below the Entry Price');
         return;
       }
     }
@@ -1625,7 +1708,7 @@ export default function BacktestPage() {
       unrealizedPips: 0,
     };
 
-    const nextOpen = [...openPositions, newPosition];
+    const nextOpen = [...openPositionsRef.current, newPosition];
     setOpenPositions(nextOpen);
 
     // Add entry marker
@@ -1637,7 +1720,7 @@ export default function BacktestPage() {
       text: `${type} ${lotSize} Lot`,
     };
 
-    const nextMarkers = [...markers, newMarker];
+    const nextMarkers = [...markersRef.current, newMarker];
     setMarkers(nextMarkers);
 
     // Reset fields
@@ -1645,15 +1728,17 @@ export default function BacktestPage() {
     setTakeProfitInput('');
 
     // Auto-save
-    autoSave(balance, currentIndex, nextOpen, closedTrades, timeframe, nextMarkers);
-  };
+    autoSave(balanceRef.current, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframeRef.current, nextMarkers);
+  }, [symbol, lotSize, stopLossInput, takeProfitInput]);
 
   // Close Position Manually
-  const handleClosePosition = (id: string, closePercent: number = 100) => {
-    const position = openPositions.find(p => p.id === id);
-    if (!position || visibleCandles.length === 0) return;
+  const handleClosePosition = useCallback((id: string, closePercent: number = 100) => {
+    const openPos = openPositionsRef.current;
+    const candlesList = visibleCandlesRef.current;
+    const position = openPos.find(p => p.id === id);
+    if (!position || candlesList.length === 0) return;
 
-    const currentCandle = visibleCandles[visibleCandles.length - 1];
+    const currentCandle = candlesList[candlesList.length - 1];
     const exitPrice = currentCandle.close;
 
     const closedLots = position.lotSize * (closePercent / 100);
@@ -1685,14 +1770,14 @@ export default function BacktestPage() {
       tags: [],
     };
 
-    const nextBalance = balance + tradePnL;
-    const nextClosed = [...closedTrades, closedRecord];
-    
+    const nextBalance = balanceRef.current + tradePnL;
+    const nextClosed = [...closedTradesRef.current, closedRecord];
+
     let nextOpen: OpenPosition[];
     if (isFullClose) {
-      nextOpen = openPositions.filter(p => p.id !== id);
+      nextOpen = openPos.filter(p => p.id !== id);
     } else {
-      nextOpen = openPositions.map(p => {
+      nextOpen = openPos.map(p => {
         if (p.id === id) {
           return {
             ...p,
@@ -1719,16 +1804,16 @@ export default function BacktestPage() {
         : `Partial ${closePercent}% (${tradePnL >= 0 ? '+' : ''}${tradePnL.toFixed(1)})`,
     };
 
-    const nextMarkers = [...markers, exitMarker];
+    const nextMarkers = [...markersRef.current, exitMarker];
     setMarkers(nextMarkers);
 
     // Auto-save
-    autoSave(nextBalance, currentIndex, nextOpen, nextClosed, timeframe, nextMarkers);
-  };
+    autoSave(nextBalance, currentIndexRef.current, nextOpen, nextClosed, timeframeRef.current, nextMarkers);
+  }, []);
 
   // Update active position SL/TP
-  const handleUpdateSLTP = (positionId: string, sl: number | undefined, tp: number | undefined) => {
-    const nextOpen = openPositions.map(p => {
+  const handleUpdateSLTP = useCallback((positionId: string, sl: number | undefined, tp: number | undefined) => {
+    const nextOpen = openPositionsRef.current.map(p => {
       if (p.id === positionId) {
         return {
           ...p,
@@ -1739,12 +1824,12 @@ export default function BacktestPage() {
       return p;
     });
     setOpenPositions(nextOpen);
-    autoSave(balance, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframe, markers);
-  };
+    autoSave(balanceRef.current, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframeRef.current, markersRef.current);
+  }, []);
 
   // Update active position entry price
-  const handleUpdateEntryPrice = (positionId: string, entryPrice: number) => {
-    const nextOpen = openPositions.map(p => {
+  const handleUpdateEntryPrice = useCallback((positionId: string, entryPrice: number) => {
+    const nextOpen = openPositionsRef.current.map(p => {
       if (p.id === positionId) {
         return {
           ...p,
@@ -1754,14 +1839,15 @@ export default function BacktestPage() {
       return p;
     });
     setOpenPositions(nextOpen);
-    autoSave(balance, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframe, markers);
-  };
+    autoSave(balanceRef.current, currentIndexRef.current, nextOpen, closedTradesRef.current, timeframeRef.current, markersRef.current);
+  }, []);
 
 
   // Helper to set inputs to quick SL/TP options
-  const setQuickSLTP = (pipsSL: number, pipsTP: number) => {
-    if (visibleCandles.length === 0) return;
-    const currentClose = visibleCandles[visibleCandles.length - 1].close;
+  const setQuickSLTP = useCallback((pipsSL: number, pipsTP: number) => {
+    const candlesList = visibleCandlesRef.current;
+    if (candlesList.length === 0) return;
+    const currentClose = candlesList[candlesList.length - 1].close;
     const config = getSymbolConfig(symbol);
 
     const buySL = currentClose - pipsSL * config.pipSize;
@@ -1769,7 +1855,104 @@ export default function BacktestPage() {
 
     setStopLossInput(buySL.toFixed(config.digits));
     setTakeProfitInput(buyTP.toFixed(config.digits));
-  };
+  }, [symbol]);
+
+  // ---- Stable callbacks for memoized panel children ----
+  // These are identity-stable across replay ticks so React.memo children skip
+  // re-rendering unless their data props actually change.
+
+  const handleToggleCloseMenu = useCallback((id: string) => {
+    setActiveCloseMenuId(prev => {
+      if (prev === id) return null;
+      setPartialClosePercent(50);
+      return id;
+    });
+  }, []);
+
+  const handleDismissCloseMenu = useCallback(() => {
+    setActiveCloseMenuId(null);
+  }, []);
+
+  const handleStartEditSL = useCallback((editKey: string, current: number | undefined) => {
+    setEditingSLId(editKey);
+    setEditingTPId(null);
+    setTempSL(current ? current.toString() : '');
+  }, []);
+
+  const handleStartEditTP = useCallback((editKey: string, current: number | undefined) => {
+    setEditingTPId(editKey);
+    setEditingSLId(null);
+    setTempTP(current ? current.toString() : '');
+  }, []);
+
+  const handleCommitSL = useCallback((positionId: string, takeProfit: number | undefined, raw: string) => {
+    const slNum = raw.trim() ? parseFloat(raw) : undefined;
+    handleUpdateSLTP(positionId, slNum, takeProfit);
+    setEditingSLId(null);
+  }, [handleUpdateSLTP]);
+
+  const handleCommitTP = useCallback((positionId: string, stopLoss: number | undefined, raw: string) => {
+    const tpNum = raw.trim() ? parseFloat(raw) : undefined;
+    handleUpdateSLTP(positionId, stopLoss, tpNum);
+    setEditingTPId(null);
+  }, [handleUpdateSLTP]);
+
+  const handleCancelEditSL = useCallback(() => setEditingSLId(null), []);
+  const handleCancelEditTP = useCallback(() => setEditingTPId(null), []);
+
+  const handleSelectBottomTab = useCallback((tab: 'positions' | 'trades' | 'analysis') => {
+    setActiveTab(tab);
+    setIsBottomPanelCollapsed(false);
+  }, []);
+
+  const handleToggleZoomLocked = useCallback(() => setIsZoomLocked(v => !v), []);
+  const handleToggleBottomPanelCollapsed = useCallback(() => setIsBottomPanelCollapsed(v => !v), []);
+  const handleChartClosePosition = useCallback((positionId: string) => handleClosePosition(positionId, 100), [handleClosePosition]);
+
+  // Live risk/reward preview for the order panel. Memoized so the OrderPanel
+  // only re-renders when its actual inputs change, not on every candle tick
+  // (currentClose is intentionally read per lastClose below).
+  const lastClose = visibleCandles.length > 0 ? visibleCandles[visibleCandles.length - 1].close : null;
+  const liveRiskReward = useMemo(() => {
+    if (lastClose === null) return null;
+    const currentPrice = lastClose;
+    const slVal = stopLossInput ? parseFloat(stopLossInput) : undefined;
+    const tpVal = takeProfitInput ? parseFloat(takeProfitInput) : undefined;
+
+    let riskUSD = 0;
+    let rewardUSD = 0;
+    let riskPercent = 0;
+    let rewardPercent = 0;
+    let rrRatio = '';
+
+    if (slVal && !isNaN(slVal)) {
+      const isBuy = slVal < currentPrice || (tpVal ? tpVal > currentPrice : true);
+      const tradeType: TradeType = isBuy ? 'BUY' : 'SELL';
+
+      riskUSD = calculatePnL(currentPrice, slVal, lotSize, tradeType, symbol);
+      riskUSD = Math.abs(riskUSD);
+      riskPercent = balance > 0 ? (riskUSD / balance) * 100 : 0;
+
+      if (tpVal && !isNaN(tpVal)) {
+        rewardUSD = calculatePnL(currentPrice, tpVal, lotSize, tradeType, symbol);
+        rewardUSD = Math.abs(rewardUSD);
+        rewardPercent = balance > 0 ? (rewardUSD / balance) * 100 : 0;
+
+        if (riskUSD > 0) {
+          rrRatio = `1:${(rewardUSD / riskUSD).toFixed(2)}`;
+        }
+      }
+      return { isBuy, riskUSD, riskPercent, rewardUSD, rewardPercent, rrRatio };
+    } else if (tpVal && !isNaN(tpVal)) {
+      const isBuy = tpVal > currentPrice;
+      const tradeType: TradeType = isBuy ? 'BUY' : 'SELL';
+      rewardUSD = calculatePnL(currentPrice, tpVal, lotSize, tradeType, symbol);
+      rewardUSD = Math.abs(rewardUSD);
+      rewardPercent = balance > 0 ? (rewardUSD / balance) * 100 : 0;
+      return { isBuy, riskUSD: 0, riskPercent: 0, rewardUSD, rewardPercent, rrRatio: '' };
+    }
+    return null;
+  }, [lastClose, stopLossInput, takeProfitInput, lotSize, symbol, balance]);
 
   const currentCandle = visibleCandles.length > 0 ? visibleCandles[visibleCandles.length - 1] : null;
   const config = getSymbolConfig(symbol);
@@ -1849,16 +2032,12 @@ export default function BacktestPage() {
 
                   <div className={styles.wizardInputGroup}>
                     <label htmlFor="leverage">Leverage</label>
-                    <select
-                      id="leverage"
-                      className={styles.wizardSelect}
+                    <Select
+                      ariaLabel="Leverage"
                       value={leverage}
-                      onChange={e => setLeverage(e.target.value)}
-                    >
-                      {LEVERAGE_OPTIONS.map(opt => (
-                        <option key={opt} value={opt}>{opt}</option>
-                      ))}
-                    </select>
+                      onChange={setLeverage}
+                      options={LEVERAGE_OPTIONS.map(opt => ({ value: opt, label: opt }))}
+                    />
                   </div>
 
                   <div className={styles.wizardActions} style={{ marginTop: 'auto', paddingTop: '1rem' }}>
@@ -1981,16 +2160,12 @@ export default function BacktestPage() {
                 {/* CSV Source Timezone — always visible */}
                 <div className={styles.wizardInputGroup} style={{ marginTop: '1.25rem', marginBottom: '1rem' }}>
                   <label htmlFor="csv-timezone">CSV Source Timezone</label>
-                  <select
-                    id="csv-timezone"
-                    className={styles.wizardSelect}
-                    value={csvTimezoneOffset}
-                    onChange={e => setCsvTimezoneOffset(parseInt(e.target.value, 10))}
-                  >
-                    {CSV_TIMEZONES.map(tz => (
-                      <option key={tz.offset} value={tz.offset}>{tz.label}</option>
-                    ))}
-                  </select>
+                  <Select
+                    ariaLabel="CSV timezone"
+                    value={String(csvTimezoneOffset)}
+                    onChange={v => setCsvTimezoneOffset(parseInt(v, 10))}
+                    options={CSV_TIMEZONES.map(tz => ({ value: String(tz.offset), label: tz.label }))}
+                  />
                   <span style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
                     Adjusts CSV timestamps to UTC during processing (e.g. choose UTC+5:30 (IST) or UTC-4 (EDT)).
                   </span>
@@ -2206,47 +2381,6 @@ export default function BacktestPage() {
     ? Math.round(((currentIndex + 1) / allCandles.length) * 100)
     : 0;
 
-  const liveRiskReward = (() => {
-    if (visibleCandles.length === 0) return null;
-    const currentPrice = visibleCandles[visibleCandles.length - 1].close;
-    const slVal = stopLossInput ? parseFloat(stopLossInput) : undefined;
-    const tpVal = takeProfitInput ? parseFloat(takeProfitInput) : undefined;
-    
-    let riskUSD = 0;
-    let rewardUSD = 0;
-    let riskPercent = 0;
-    let rewardPercent = 0;
-    let rrRatio = '';
-
-    if (slVal && !isNaN(slVal)) {
-      const isBuy = slVal < currentPrice || (tpVal ? tpVal > currentPrice : true);
-      const tradeType: TradeType = isBuy ? 'BUY' : 'SELL';
-      
-      riskUSD = calculatePnL(currentPrice, slVal, lotSize, tradeType, symbol);
-      riskUSD = Math.abs(riskUSD);
-      riskPercent = balance > 0 ? (riskUSD / balance) * 100 : 0;
-      
-      if (tpVal && !isNaN(tpVal)) {
-        rewardUSD = calculatePnL(currentPrice, tpVal, lotSize, tradeType, symbol);
-        rewardUSD = Math.abs(rewardUSD);
-        rewardPercent = balance > 0 ? (rewardUSD / balance) * 100 : 0;
-        
-        if (riskUSD > 0) {
-          rrRatio = `1:${(rewardUSD / riskUSD).toFixed(2)}`;
-        }
-      }
-      return { isBuy, riskUSD, riskPercent, rewardUSD, rewardPercent, rrRatio };
-    } else if (tpVal && !isNaN(tpVal)) {
-      const isBuy = tpVal > currentPrice;
-      const tradeType: TradeType = isBuy ? 'BUY' : 'SELL';
-      rewardUSD = calculatePnL(currentPrice, tpVal, lotSize, tradeType, symbol);
-      rewardUSD = Math.abs(rewardUSD);
-      rewardPercent = balance > 0 ? (rewardUSD / balance) * 100 : 0;
-      return { isBuy, riskUSD: 0, riskPercent: 0, rewardUSD, rewardPercent, rrRatio: '' };
-    }
-    return null;
-  })();
-
   return (
     <div className={styles.backtestContainer}>
       {isLoading && (
@@ -2267,17 +2401,20 @@ export default function BacktestPage() {
           <span className={styles.symbolDisplay}>{SYMBOLS[symbol]?.name || symbol}</span>
 
           {/* Chart type */}
-          <select
-            className={styles.chartTypeSelect}
+          <Select
+            ariaLabel="Chart type"
+            size="sm"
             value={chartType}
-            onChange={(e) => setChartType(e.target.value as any)}
-          >
-            <option value="Candles" style={{ background: '#0f1322' }}>Candles</option>
-            <option value="HeikinAshi" style={{ background: '#0f1322' }}>Heikin Ashi</option>
-            <option value="Bars" style={{ background: '#0f1322' }}>Bars</option>
-            <option value="Line" style={{ background: '#0f1322' }}>Line</option>
-            <option value="Area" style={{ background: '#0f1322' }}>Area</option>
-          </select>
+            onChange={(v) => setChartType(v as any)}
+            style={{ minWidth: 118 }}
+            options={[
+              { value: 'Candles', label: 'Candles' },
+              { value: 'HeikinAshi', label: 'Heikin Ashi' },
+              { value: 'Bars', label: 'Bars' },
+              { value: 'Line', label: 'Line' },
+              { value: 'Area', label: 'Area' },
+            ]}
+          />
 
           <div className={styles.topBarDivider} />
 
@@ -2340,12 +2477,12 @@ export default function BacktestPage() {
             onClick={() => chartComponentRef.current?.toggleFullscreen()}
           >⛶</button>
 
-          <div style={{ position: 'relative' }}>
+          <div>
             <button
               ref={settingsBtnRef}
               className={styles.topBarBtn}
               title="Chart Display Settings"
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              onClick={() => setIsSettingsOpen(true)}
               style={{
                 borderColor: isSettingsOpen ? 'var(--term-accent, #7c4dff)' : 'var(--term-border-strong)',
                 background: isSettingsOpen ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
@@ -2354,40 +2491,12 @@ export default function BacktestPage() {
               ⚙️ settings
             </button>
             
-            {isSettingsOpen && (
-              <>
-                <div 
-                  style={{ position: 'fixed', inset: 0, zIndex: 29999 }} 
-                  onClick={() => setIsSettingsOpen(false)} 
-                />
-                <div 
-                  className={styles.settingsDropdown}
-                  style={{
-                    position: 'fixed',
-                    top: dropdownPosition ? `${dropdownPosition.top}px` : 'auto',
-                    left: dropdownPosition ? `${dropdownPosition.left}px` : 'auto',
-                  }}
-                >
-                  <div className={styles.settingsDropdownTitle}>Chart Options</div>
-                  <label className={styles.settingsDropdownItem}>
-                    <input
-                      type="checkbox"
-                      checked={showTradeHistory}
-                      onChange={(e) => setShowTradeHistory(e.target.checked)}
-                    />
-                    <span>Show Trade History</span>
-                  </label>
-                  <label className={styles.settingsDropdownItem}>
-                    <input
-                      type="checkbox"
-                      checked={showTradeLevels}
-                      onChange={(e) => setShowTradeLevels(e.target.checked)}
-                    />
-                    <span>Show Trade Levels</span>
-                  </label>
-                </div>
-              </>
-            )}
+            <ChartSettingsModal
+              isOpen={isSettingsOpen}
+              settings={chartSettings}
+              onClose={() => setIsSettingsOpen(false)}
+              onSave={(newSettings) => setChartSettings(newSettings)}
+            />
           </div>
 
           <div className={styles.topBarDivider} />
@@ -2448,421 +2557,58 @@ export default function BacktestPage() {
         <aside className={`${styles.tradePanel} ${isOrderPanelOpen ? styles.orderPanelOpen : ''} ${isTradePanelCollapsed ? styles.tradePanelCollapsed : ''}`}>
 
           {/* Replay Controls */}
-          <div className={styles.panelSection}>
-            <h3 className={styles.panelTitle} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Replay Control</span>
-              <span 
-                title="Keyboard Shortcuts:&#10;• Space - Play/Pause replay&#10;• ArrowRight - Step forward 1 bar&#10;• R - Reset replay session&#10;• Ctrl+Z - Undo drawing&#10;• Ctrl+Y - Redo drawing&#10;• Alt+T - Trend Line tool&#10;• Alt+H - Horizontal Line tool&#10;• Alt+V - Vertical Line tool&#10;• Alt+F - Fib Retracement tool&#10;• Alt+E - Rectangle tool&#10;• Alt+R - Reset chart zoom&#10;• Alt+A - Text Annotation tool&#10;• Alt+P - Path tool&#10;• Alt+M - Measure tool&#10;• Alt+C - Clear active drawing tool" 
-                style={{ cursor: 'help', fontSize: '0.72rem', opacity: 0.6, fontWeight: 'normal', color: 'var(--text-secondary)' }}
-              >
-                ℹ️ Shortcuts
-              </span>
-            </h3>
-            <div className={styles.replayControlsCard}>
-              <div className={styles.controlButtons} style={{ display: 'flex', gap: '4px', alignItems: 'center', width: '100%' }}>
-                <button
-                  className={styles.stepBtn}
-                  onClick={handleReset}
-                  title="Reset session to Start (R)"
-                  style={{ flex: 1, padding: 0, justifyContent: 'center', height: '34px' }}
-                >
-                  <span>⏮</span>
-                </button>
-                <button
-                  className={styles.stepBtn}
-                  onClick={stepBackward}
-                  title="Step Backward 1 bar (ArrowLeft)"
-                  style={{ flex: 1, padding: 0, justifyContent: 'center', height: '34px' }}
-                >
-                  <span>⏪</span>
-                </button>
-                <button
-                  className={styles.playBtn}
-                  onClick={handleTogglePlay}
-                  style={{
-                    backgroundColor: isPlaying ? 'var(--term-accent, #7d79f2)' : 'rgba(255,255,255,0.04)',
-                    border: isPlaying ? '1px solid var(--term-accent, #7d79f2)' : '1px solid var(--term-border-strong, rgba(255,255,255,0.11))',
-                    color: isPlaying ? '#ffffff' : 'var(--term-text-2, #a9a9b3)',
-                    height: '34px',
-                    flex: 1.5,
-                    padding: 0,
-                    justifyContent: 'center'
-                  }}
-                  title={isPlaying ? "Pause Playback (Space)" : "Play Replay (Space)"}
-                >
-                  {isPlaying ? <span>⏸</span> : <span>▶</span>}
-                </button>
-                <button
-                  className={styles.stepBtn}
-                  onClick={() => { setIsPlaying(false); stepForward(); }}
-                  title="Step Forward 1 bar (ArrowRight)"
-                  style={{ flex: 1, padding: 0, justifyContent: 'center', height: '34px' }}
-                >
-                  <span>⏭</span>
-                </button>
-                <button
-                  className={styles.stepBtn}
-                  onClick={() => setIsJumpToBarActive(!isJumpToBarActive)}
-                  title="Jump to Bar (Click a candle to jump)"
-                  style={{
-                    flex: 1,
-                    padding: 0,
-                    justifyContent: 'center',
-                    height: '34px',
-                    backgroundColor: isJumpToBarActive ? 'rgba(125, 121, 242, 0.16)' : 'rgba(255, 255, 255, 0.04)',
-                    border: isJumpToBarActive ? '1px solid var(--term-accent, #7d79f2)' : '1px solid var(--term-border-strong, rgba(255, 255, 255, 0.11))',
-                    color: isJumpToBarActive ? 'var(--term-accent-light, #8f8bf5)' : 'var(--term-text-2, #a9a9b3)',
-                  }}
-                >
-                  <span>📍</span>
-                </button>
-              </div>
-
-                <div className={styles.replayProgress}>
-                  <div className={styles.replayProgressFill} style={{ width: `${replayPercent}%` }} />
-                </div>
-
-                <div className={styles.speedControls}>
-                  <span className={styles.speedLabel}>Speed</span>
-                  <div className={styles.speedSelector}>
-                    {[
-                      { label: '1/s', ms: 1000 },
-                      { label: '2/s', ms: 500 },
-                      { label: '3/s', ms: 333 },
-                      { label: '4/s', ms: 250 },
-                      { label: '5/s', ms: 200 },
-                    ].map(sp => (
-                      <button
-                        key={sp.ms}
-                        className={`${styles.speedBtn} ${speed === sp.ms ? styles.activeSpeed : ''}`}
-                        onClick={() => setSpeed(sp.ms)}
-                      >
-                        {sp.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className={styles.candleCounter}>
-                  {currentIndex + 1} / {allCandles.length} candles ({replayPercent}%)
-                </div>
-            </div>
-          </div>
+          <PlaybackControls
+            isPlaying={isPlaying}
+            speed={speed}
+            isJumpToBarActive={isJumpToBarActive}
+            currentIndex={currentIndex}
+            totalCandles={allCandles.length}
+            replayPercent={replayPercent}
+            onReset={handleReset}
+            onStepBackward={stepBackward}
+            onTogglePlay={handleTogglePlay}
+            onStepForwardManual={handleStepForwardManual}
+            onToggleJumpToBar={handleToggleJumpToBar}
+            onSetSpeed={setSpeed}
+          />
 
           {/* Trade Execution */}
-          <div className={styles.panelSection}>
-            <h3 className={styles.panelTitle}>Place Order</h3>
-
-            <div className={styles.tradeCard}>
-              <div className={styles.tradeActions}>
-                <button className={styles.buyBtn} onClick={() => handlePlaceOrder('BUY')}>BUY / Long</button>
-                <button className={styles.sellBtn} onClick={() => handlePlaceOrder('SELL')}>SELL / Short</button>
-              </div>
-
-              <div className={styles.inputGroup}>
-                <label className={styles.inputLabel}>
-                  <span>Lots</span>
-                  <span>1 Lot = {symbol === 'XAUUSD' ? '100 oz' : '100,000 units'}</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  className={styles.inputField}
-                  value={lotSize}
-                  onChange={e => setLotSize(parseFloat(e.target.value) || 0.01)}
-                />
-              </div>
-
-              <div className={styles.inputGroup}>
-                <label className={styles.inputLabel}>Stop Loss Price</label>
-                <input
-                  type="text"
-                  placeholder="No Stop Loss"
-                  className={styles.inputField}
-                  value={stopLossInput}
-                  onChange={e => setStopLossInput(e.target.value)}
-                />
-              </div>
-
-              <div className={styles.inputGroup}>
-                <label className={styles.inputLabel}>Take Profit Price</label>
-                <input
-                  type="text"
-                  placeholder="No Take Profit"
-                  className={styles.inputField}
-                  value={takeProfitInput}
-                  onChange={e => setTakeProfitInput(e.target.value)}
-                />
-              </div>
-
-              {liveRiskReward && (
-                <div style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  borderRadius: '6px',
-                  padding: '0.5rem',
-                  marginTop: '0.25rem',
-                  marginBottom: '0.25rem',
-                  fontSize: '0.72rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.2rem'
-                }}>
-                  <div style={{ color: 'var(--accent, #00e5ff)', fontWeight: 'bold' }}>
-                    Setup Direction: <span style={{ color: liveRiskReward.isBuy ? '#10b981' : '#ef4444' }}>{liveRiskReward.isBuy ? 'BUY / Long' : 'SELL / Short'}</span>
-                  </div>
-                  {liveRiskReward.riskUSD > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary, #94a3b8)' }}>Risk (Loss):</span>
-                      <span style={{ color: '#ef4444', fontWeight: 'bold' }}>-{formatCurrency(liveRiskReward.riskUSD)} ({liveRiskReward.riskPercent.toFixed(2)}%)</span>
-                    </div>
-                  )}
-                  {liveRiskReward.rewardUSD > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary, #94a3b8)' }}>Reward (Profit):</span>
-                      <span style={{ color: '#10b981', fontWeight: 'bold' }}>+{formatCurrency(liveRiskReward.rewardUSD)} ({liveRiskReward.rewardPercent.toFixed(2)}%)</span>
-                    </div>
-                  )}
-                  {liveRiskReward.rrRatio && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '0.2rem', marginTop: '0.2rem' }}>
-                      <span style={{ color: 'var(--text-secondary, #94a3b8)', fontWeight: 600 }}>Risk/Reward Ratio:</span>
-                      <span style={{ color: '#00e5ff', fontWeight: 'bold' }}>{liveRiskReward.rrRatio}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.25rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setQuickSLTP(50, 100)}
-                  style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    padding: '0.35rem',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    cursor: 'pointer',
-                    color: 'var(--text-secondary)',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                >
-                  Quick 1:2 (50/100p)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickSLTP(100, 200)}
-                  style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    padding: '0.35rem',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    cursor: 'pointer',
-                    color: 'var(--text-secondary)',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                >
-                  Quick 1:2 (100/200p)
-                </button>
-              </div>
-            </div>
-          </div>
+          <OrderPanel
+            symbol={symbol}
+            lotSize={lotSize}
+            stopLossInput={stopLossInput}
+            takeProfitInput={takeProfitInput}
+            liveRiskReward={liveRiskReward}
+            onPlaceOrder={handlePlaceOrder}
+            onSetLotSize={setLotSize}
+            onSetStopLossInput={setStopLossInput}
+            onSetTakeProfitInput={setTakeProfitInput}
+            onQuickSLTP={setQuickSLTP}
+          />
 
           {/* Active Positions */}
-          <div className={styles.panelSection} style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <h3 className={styles.panelTitle}>Active Positions ({openPositions.length})</h3>
-            <div className={styles.positionsList}>
-              {openPositions.length === 0 ? (
-                <div className={styles.emptyState}>No active open positions. Place an order to start trading.</div>
-              ) : (
-                openPositions.map(pos => (
-                  <div
-                    key={pos.id}
-                    className={`${styles.positionCard} ${pos.type === 'BUY' ? styles.posLong : styles.posShort}`}
-                  >
-                    <div className={styles.posHeader}>
-                      <span style={{ fontWeight: 700, fontSize: '0.8rem', color: pos.type === 'BUY' ? '#10b981' : '#ef4444' }}>
-                        {pos.type} {pos.lotSize.toFixed(2)} Lots
-                      </span>
-                      
-                      <div style={{ position: 'relative' }}>
-                        <button
-                          className={styles.posCloseBtn}
-                          onClick={() => {
-                            if (activeCloseMenuId === pos.id) {
-                              setActiveCloseMenuId(null);
-                            } else {
-                              setActiveCloseMenuId(pos.id);
-                              setPartialClosePercent(50);
-                            }
-                          }}
-                        >
-                          CLOSE
-                        </button>
-                        
-                        {activeCloseMenuId === pos.id && (
-                          <div className={styles.closeDropdown}>
-                            <button
-                              type="button"
-                              className={styles.closeDropdownItem}
-                              onClick={() => {
-                                handleClosePosition(pos.id, 100);
-                                setActiveCloseMenuId(null);
-                              }}
-                            >
-                              Full Close (100%)
-                            </button>
-                            
-                            <div className={styles.partialSection}>
-                              <div className={styles.sliderHeader}>
-                                <span>Partial: {partialClosePercent}%</span>
-                                <span>({(pos.lotSize * partialClosePercent / 100).toFixed(2)} L)</span>
-                              </div>
-                              <input
-                                type="range"
-                                min="10"
-                                max="90"
-                                step="10"
-                                value={partialClosePercent}
-                                onChange={e => setPartialClosePercent(parseInt(e.target.value))}
-                                className={styles.percentSlider}
-                              />
-                              <div className={styles.presetRow}>
-                                {[25, 50, 75].map(pct => (
-                                  <button
-                                    key={pct}
-                                    type="button"
-                                    className={styles.presetBtn}
-                                    onClick={() => setPartialClosePercent(pct)}
-                                  >
-                                    {pct}%
-                                  </button>
-                                ))}
-                              </div>
-                              <button
-                                type="button"
-                                className={styles.confirmCloseBtn}
-                                onClick={() => {
-                                  handleClosePosition(pos.id, partialClosePercent);
-                                  setActiveCloseMenuId(null);
-                                }}
-                              >
-                                Confirm Close
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className={styles.posDetails}>
-                      <span>Entry: {formatPrice(pos.entryPrice, symbol)}</span>
-                      <span>Price: {formatPrice(pos.currentPrice, symbol)}</span>
-                    </div>
-
-                    <div className={styles.posDetails}>
-                      <span>
-                        SL:{' '}
-                        {editingSLId === pos.id ? (
-                          <input
-                            type="number"
-                            step="any"
-                            value={tempSL}
-                            onChange={e => setTempSL(e.target.value)}
-                            onBlur={() => {
-                              const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
-                              handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
-                              setEditingSLId(null);
-                            }}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
-                                handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
-                                setEditingSLId(null);
-                              } else if (e.key === 'Escape') {
-                                setEditingSLId(null);
-                              }
-                            }}
-                            className={styles.smallPriceInput}
-                            autoFocus
-                          />
-                        ) : (
-                          <span
-                            className={styles.editableField}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingSLId(pos.id);
-                              setEditingTPId(null);
-                              setTempSL(pos.stopLoss ? pos.stopLoss.toString() : '');
-                            }}
-                            title="Click to edit SL"
-                          >
-                            {pos.stopLoss ? formatPrice(pos.stopLoss, symbol) : 'None'} ✎
-                          </span>
-                        )}
-                      </span>
-
-                      <span>
-                        TP:{' '}
-                        {editingTPId === pos.id ? (
-                          <input
-                            type="number"
-                            step="any"
-                            value={tempTP}
-                            onChange={e => setTempTP(e.target.value)}
-                            onBlur={() => {
-                              const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
-                              handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
-                              setEditingTPId(null);
-                            }}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
-                                handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
-                                setEditingTPId(null);
-                              } else if (e.key === 'Escape') {
-                                setEditingTPId(null);
-                              }
-                            }}
-                            className={styles.smallPriceInput}
-                            autoFocus
-                          />
-                        ) : (
-                          <span
-                            className={styles.editableField}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingTPId(pos.id);
-                              setEditingSLId(null);
-                              setTempTP(pos.takeProfit ? pos.takeProfit.toString() : '');
-                            }}
-                            title="Click to edit TP"
-                          >
-                            {pos.takeProfit ? formatPrice(pos.takeProfit, symbol) : 'None'} ✎
-                          </span>
-                        )}
-                      </span>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem' }}>
-                      <span className={styles.posPnl} style={{ color: pos.unrealizedPnl >= 0 ? '#10b981' : '#ef4444' }}>
-                        {formatCurrency(pos.unrealizedPnl)}
-                      </span>
-                      <span style={{ fontSize: '0.75rem', opacity: 0.6, fontFamily: 'monospace' }}>
-                        {formatPips(pos.unrealizedPips)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <PositionsSidebar
+            openPositions={openPositions}
+            symbol={symbol}
+            activeCloseMenuId={activeCloseMenuId}
+            partialClosePercent={partialClosePercent}
+            editingSLId={editingSLId}
+            editingTPId={editingTPId}
+            tempSL={tempSL}
+            tempTP={tempTP}
+            onToggleCloseMenu={handleToggleCloseMenu}
+            onSetPartialClosePercent={setPartialClosePercent}
+            onClosePosition={handleClosePosition}
+            onDismissCloseMenu={handleDismissCloseMenu}
+            onSetTempSL={setTempSL}
+            onSetTempTP={setTempTP}
+            onStartEditSL={handleStartEditSL}
+            onStartEditTP={handleStartEditTP}
+            onCommitSL={handleCommitSL}
+            onCommitTP={handleCommitTP}
+            onCancelEditSL={handleCancelEditSL}
+            onCancelEditTP={handleCancelEditTP}
+          />
         </aside>
 
         {/* ── RIGHT CHART CONTAINER ── */}
@@ -3009,10 +2755,13 @@ export default function BacktestPage() {
                   timeframe={timeframe}
                   isZoomLocked={isZoomLocked}
                   closedTrades={closedTrades}
-                  showTradeHistory={showTradeHistory}
-                  showTradeLevels={showTradeLevels}
+                  showTradeHistory={chartSettings.showTradeHistory}
+                  showTradeLevels={chartSettings.showTradeLevels}
+                  chartSettings={chartSettings}
                   onUpdateSLTP={handleUpdateSLTP}
                   onUpdateEntryPrice={handleUpdateEntryPrice}
+                  onClosePosition={handleChartClosePosition}
+                  onPlaceTrade={handlePlaceOrder}
                 />
 
                 {/* Fullscreen Original Panels Toggle Overlays */}
@@ -3036,15 +2785,14 @@ export default function BacktestPage() {
 
                 {/* Display Timezone Selector Overlay */}
                 <div className={styles.timezoneSelectorContainer}>
-                  <select
+                  <Select
+                    ariaLabel="Display timezone"
+                    size="sm"
                     value={displayTimezone}
-                    onChange={(e) => setDisplayTimezone(e.target.value)}
-                    className={styles.timezoneSelect}
-                  >
-                    {DISPLAY_TIMEZONES.map(tz => (
-                      <option key={tz.value} value={tz.value}>{tz.label}</option>
-                    ))}
-                  </select>
+                    onChange={setDisplayTimezone}
+                    style={{ minWidth: 150 }}
+                    options={DISPLAY_TIMEZONES.map(tz => ({ value: tz.value, label: tz.label }))}
+                  />
                 </div>
                 
                 <ObjectTreePanel 
@@ -3074,340 +2822,53 @@ export default function BacktestPage() {
           onTouchMove={handleBottomSheetTouchMove}
           onTouchEnd={handleBottomSheetTouchEnd}
         />
-        <div className={styles.tabsHeader}>
-          <div className={styles.tabsList}>
-            <button
-              className={`${styles.tabButton} ${activeTab === 'positions' ? styles.activeTabButton : ''}`}
-              onClick={() => {
-                setActiveTab('positions');
-                setIsBottomPanelCollapsed(false);
-              }}
-            >
-              💼 Open Positions ({openPositions.length})
-            </button>
-            <button
-              className={`${styles.tabButton} ${activeTab === 'trades' ? styles.activeTabButton : ''}`}
-              onClick={() => {
-                setActiveTab('trades');
-                setIsBottomPanelCollapsed(false);
-              }}
-            >
-              📜 Trade History ({closedTrades.length})
-            </button>
-            <button
-              className={`${styles.tabButton} ${activeTab === 'analysis' ? styles.activeTabButton : ''}`}
-              onClick={() => {
-                setActiveTab('analysis');
-                setIsBottomPanelCollapsed(false);
-              }}
-            >
-              📊 Performance Analytics
-            </button>
-          </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div className={styles.saveStatusIndicator}>
-              {saveStatus === 'saving' && <span>⏳ Auto-saving...</span>}
-              {saveStatus === 'saved' && <span style={{ color: '#10b981' }}>✓ Changes saved</span>}
-              {saveStatus === 'error' && <span style={{ color: '#ef4444' }}>❌ Save failed</span>}
-            </div>
-
-            <button
-              onClick={() => setIsZoomLocked(!isZoomLocked)}
-              title={isZoomLocked ? "Zoom is Locked (Auto-scrolls to latest candle on replay)" : "Zoom is Unlocked (Allows manual zoom/pan during replay)"}
-              style={{
-                background: isZoomLocked ? 'rgba(125, 121, 242, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                border: isZoomLocked ? '1px solid var(--term-accent, #7d79f2)' : '1px solid var(--term-border, rgba(255, 255, 255, 0.08))',
-                color: isZoomLocked ? 'var(--term-accent-light, #8f8bf5)' : 'var(--term-text-3, #7a7a85)',
-                padding: '0.2rem 0.6rem',
-                borderRadius: '6px',
-                fontSize: '0.78rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'all 0.12s ease',
-              }}
-            >
-              {isZoomLocked ? '🔒 Zoom Locked' : '🔓 Zoom Unlocked'}
-            </button>
-
-            <button
-              className={styles.collapseTabBtn}
-              onClick={() => setIsBottomPanelCollapsed(!isBottomPanelCollapsed)}
-              title={isBottomPanelCollapsed ? 'Expand Panel' : 'Collapse Panel'}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary, #94a3b8)',
-                cursor: 'pointer',
-                fontSize: '0.8rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0.2rem 0.5rem',
-                borderRadius: '4px',
-                transition: 'all 0.12s'
-              }}
-            >
-              {isBottomPanelCollapsed ? '▲ Expand' : '▼ Collapse'}
-            </button>
-          </div>
-        </div>
+        <TabsHeader
+          activeTab={activeTab}
+          openPositionsCount={openPositions.length}
+          closedTradesCount={closedTrades.length}
+          saveStatus={saveStatus}
+          isZoomLocked={isZoomLocked}
+          isBottomPanelCollapsed={isBottomPanelCollapsed}
+          onSelectTab={handleSelectBottomTab}
+          onToggleZoomLocked={handleToggleZoomLocked}
+          onToggleBottomPanelCollapsed={handleToggleBottomPanelCollapsed}
+        />
 
         <div className={styles.tabContent}>
           {/* ============ POSITIONS TAB ============ */}
           {activeTab === 'positions' && (
             <div style={{ height: '100%', overflowY: 'auto' }}>
-              {openPositions.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '2rem 0', textAlign: 'center' }}>
-                  No active open positions. Place a buy or sell order from the side panel to start trading.
-                </div>
-              ) : (
-                <table className={styles.bottomTable}>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Symbol</th>
-                      <th>Type</th>
-                      <th>Lots</th>
-                      <th>Entry Price</th>
-                      <th>Current Price</th>
-                      <th>Stop Loss</th>
-                      <th>Take Profit</th>
-                      <th>P&L (USD)</th>
-                      <th>Pips</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {openPositions.map(pos => (
-                      <tr key={pos.id} className={styles.bottomTableRow}>
-                        <td>{pos.id.split('-')[1] || pos.id.slice(0, 5)}</td>
-                        <td>{pos.symbol}</td>
-                        <td style={{ color: pos.type === 'BUY' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>{pos.type}</td>
-                        <td>{pos.lotSize.toFixed(2)}</td>
-                        <td>{formatPrice(pos.entryPrice, pos.symbol)}</td>
-                        <td>{formatPrice(pos.currentPrice, pos.symbol)}</td>
-                        
-                        <td>
-                          {editingSLId === pos.id ? (
-                            <input
-                              type="number"
-                              step="any"
-                              value={tempSL}
-                              onChange={e => setTempSL(e.target.value)}
-                              onBlur={() => {
-                                const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
-                                handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
-                                setEditingSLId(null);
-                              }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  const slNum = tempSL.trim() ? parseFloat(tempSL) : undefined;
-                                  handleUpdateSLTP(pos.id, slNum, pos.takeProfit);
-                                  setEditingSLId(null);
-                                } else if (e.key === 'Escape') {
-                                  setEditingSLId(null);
-                                }
-                              }}
-                              className={styles.smallPriceInput}
-                              autoFocus
-                            />
-                          ) : (
-                            <span
-                              className={styles.editableField}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingSLId(pos.id);
-                                setEditingTPId(null);
-                                setTempSL(pos.stopLoss ? pos.stopLoss.toString() : '');
-                              }}
-                              title="Click to edit SL"
-                            >
-                              {pos.stopLoss ? formatPrice(pos.stopLoss, pos.symbol) : 'None'} ✎
-                            </span>
-                          )}
-                        </td>
-                        
-                        <td>
-                          {editingTPId === pos.id ? (
-                            <input
-                              type="number"
-                              step="any"
-                              value={tempTP}
-                              onChange={e => setTempTP(e.target.value)}
-                              onBlur={() => {
-                                const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
-                                handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
-                                setEditingTPId(null);
-                              }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  const tpNum = tempTP.trim() ? parseFloat(tempTP) : undefined;
-                                  handleUpdateSLTP(pos.id, pos.stopLoss, tpNum);
-                                  setEditingTPId(null);
-                                } else if (e.key === 'Escape') {
-                                  setEditingTPId(null);
-                                }
-                              }}
-                              className={styles.smallPriceInput}
-                              autoFocus
-                            />
-                          ) : (
-                            <span
-                              className={styles.editableField}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingTPId(pos.id);
-                                setEditingSLId(null);
-                                setTempTP(pos.takeProfit ? pos.takeProfit.toString() : '');
-                              }}
-                              title="Click to edit TP"
-                            >
-                              {pos.takeProfit ? formatPrice(pos.takeProfit, pos.symbol) : 'None'} ✎
-                            </span>
-                          )}
-                        </td>
-
-                        <td style={{ color: pos.unrealizedPnl >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
-                          {formatCurrency(pos.unrealizedPnl)}
-                        </td>
-                        <td style={{ color: pos.unrealizedPips >= 0 ? '#10b981' : '#ef4444' }}>
-                          {formatPips(pos.unrealizedPips)}
-                        </td>
-                        <td style={{ position: 'relative', overflow: 'visible' }}>
-                          <button
-                            className={styles.posCloseBtn}
-                            onClick={() => {
-                              if (activeCloseMenuId === pos.id) {
-                                setActiveCloseMenuId(null);
-                              } else {
-                                setActiveCloseMenuId(pos.id);
-                                setPartialClosePercent(50);
-                              }
-                            }}
-                            style={{ margin: 0, padding: '0.2rem 0.5rem', fontSize: '0.7rem' }}
-                          >
-                            CLOSE
-                          </button>
-                          
-                          {activeCloseMenuId === pos.id && (
-                            <div className={styles.closeDropdown} style={{ right: 0, top: '100%', left: 'auto' }}>
-                              <button
-                                type="button"
-                                className={styles.closeDropdownItem}
-                                onClick={() => {
-                                  handleClosePosition(pos.id, 100);
-                                  setActiveCloseMenuId(null);
-                                }}
-                              >
-                                Full Close (100%)
-                              </button>
-                              
-                              <div className={styles.partialSection}>
-                                <div className={styles.sliderHeader}>
-                                  <span>Partial: {partialClosePercent}%</span>
-                                  <span>({(pos.lotSize * partialClosePercent / 100).toFixed(2)} L)</span>
-                                </div>
-                                <input
-                                  type="range"
-                                  min="10"
-                                  max="90"
-                                  step="10"
-                                  value={partialClosePercent}
-                                  onChange={e => setPartialClosePercent(parseInt(e.target.value))}
-                                  className={styles.percentSlider}
-                                />
-                                <div className={styles.presetRow}>
-                                  {[25, 50, 75].map(pct => (
-                                    <button
-                                      key={pct}
-                                      type="button"
-                                      className={styles.presetBtn}
-                                      onClick={() => setPartialClosePercent(pct)}
-                                    >
-                                      {pct}%
-                                    </button>
-                                  ))}
-                                </div>
-                                <button
-                                  type="button"
-                                  className={styles.confirmCloseBtn}
-                                  onClick={() => {
-                                    handleClosePosition(pos.id, partialClosePercent);
-                                    setActiveCloseMenuId(null);
-                                  }}
-                                >
-                                  Confirm Close
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <OpenPositionsTable
+                openPositions={openPositions}
+                activeCloseMenuId={activeCloseMenuId}
+                partialClosePercent={partialClosePercent}
+                editingSLId={editingSLId}
+                editingTPId={editingTPId}
+                tempSL={tempSL}
+                tempTP={tempTP}
+                onToggleCloseMenu={handleToggleCloseMenu}
+                onSetPartialClosePercent={setPartialClosePercent}
+                onClosePosition={handleClosePosition}
+                onDismissCloseMenu={handleDismissCloseMenu}
+                onSetTempSL={setTempSL}
+                onSetTempTP={setTempTP}
+                onStartEditSL={handleStartEditSL}
+                onStartEditTP={handleStartEditTP}
+                onCommitSL={handleCommitSL}
+                onCommitTP={handleCommitTP}
+                onCancelEditSL={handleCancelEditSL}
+                onCancelEditTP={handleCancelEditTP}
+              />
             </div>
           )}
 
           {/* ============ HISTORY TAB ============ */}
           {activeTab === 'trades' && (
             <div style={{ height: '100%', overflowY: 'auto' }}>
-              {closedTrades.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '2rem 0', textAlign: 'center' }}>
-                  No closed trades in this session yet. Close open positions or wait for SL/TP to trigger.
-                </div>
-              ) : (
-                <table className={styles.bottomTable}>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Symbol</th>
-                      <th>Type</th>
-                      <th>Lots</th>
-                      <th>Entry Price</th>
-                      <th>Exit Price</th>
-                      <th>Stop Loss</th>
-                      <th>Take Profit</th>
-                      <th>P&L (USD)</th>
-                      <th>P&L (Pips)</th>
-                      <th>Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {closedTrades.map(trade => {
-                      const duration = trade.exitTime && trade.entryTime ? trade.exitTime - trade.entryTime : 0;
-                      return (
-                        <tr key={trade.id} className={styles.bottomTableRow}>
-                          <td>{trade.id.split('-')[1] || trade.id.slice(0, 5)}</td>
-                          <td>{trade.symbol}</td>
-                          <td style={{ color: trade.type === 'BUY' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>{trade.type}</td>
-                          <td>{trade.lotSize.toFixed(2)}</td>
-                          <td>{formatPrice(trade.entryPrice, trade.symbol)}</td>
-                          <td>{trade.exitPrice ? formatPrice(trade.exitPrice, trade.symbol) : '-'}</td>
-                          <td>{trade.stopLoss ? formatPrice(trade.stopLoss, trade.symbol) : '-'}</td>
-                          <td>{trade.takeProfit ? formatPrice(trade.takeProfit, trade.symbol) : '-'}</td>
-                          <td style={{ color: (trade.pnl ?? 0) >= 0 ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
-                            {formatCurrency(trade.pnl ?? 0)}
-                          </td>
-                          <td style={{ color: (trade.pnlPips ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
-                            {formatPips(trade.pnlPips ?? 0)}
-                          </td>
-                          <td style={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                            {duration > 0 ? formatDuration(duration) : 'Instant'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
+              <TradeHistoryTable closedTrades={closedTrades} />
             </div>
           )}
+
 
           {/* ============ PERFORMANCE ANALYTICS TAB ============ */}
           {activeTab === 'analysis' && (

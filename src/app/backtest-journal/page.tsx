@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useConfirm } from '@/components/ui/ConfirmDialog';
 import styles from './page.module.css';
 
 interface RecordItem {
@@ -19,6 +20,7 @@ interface RecordItem {
 }
 
 export default function BacktestJournalPage() {
+  const confirm = useConfirm();
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -113,9 +115,13 @@ export default function BacktestJournalPage() {
   };
 
   const handleDeleteRecord = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this backtest record? All associated trade entries will be permanently deleted.')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Delete backtest record?',
+      message: 'All associated trade entries will be permanently deleted.',
+      confirmLabel: 'Delete',
+      danger: true,
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`/api/backtest-journal/records/${id}`, {
