@@ -35,7 +35,7 @@ const ObjectTreePanel = dynamic(() => import('@/components/backtest/ObjectTreePa
 const Chart = dynamic(() => import('@/components/backtest/Chart'), {
   ssr: false,
   loading: () => (
-    <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', backgroundColor: '#0a0e17' }}>
+    <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', height: '100%', color: '#787b86', backgroundColor: '#f8f9fd' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
         <div className="spinner" />
         <span>Initializing TradingView Engine...</span>
@@ -301,7 +301,7 @@ export default function BacktestPage() {
       const startMarker: ChartMarker = {
         time: startCandle.time,
         position: 'belowBar',
-        color: '#7c4dff', // Premium purple start marker
+        color: '#2962ff', // Blue start marker
         shape: 'arrowUp',
         text: 'Replay Start',
       };
@@ -1963,7 +1963,7 @@ export default function BacktestPage() {
 
   if (!mounted) {
     return (
-      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#080b12', color: '#94a3b8', alignItems: 'center', justifyContent: 'center' }} suppressHydrationWarning>
+      <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8f9fd', color: '#787b86', alignItems: 'center', justifyContent: 'center' }} suppressHydrationWarning>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }} suppressHydrationWarning>
           <div className="spinner" suppressHydrationWarning />
           <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>Initializing TradingView Engine...</span>
@@ -2178,10 +2178,10 @@ export default function BacktestPage() {
                 <div className={styles.selectorWrapper} style={{
                   display: 'flex',
                   gap: '2px',
-                  background: 'var(--term-input, #101014)',
+                  background: 'var(--term-input, #f0f3fa)',
                   padding: '3px',
                   borderRadius: '8px',
-                  border: '1px solid var(--term-border, rgba(255, 255, 255, 0.06))',
+                  border: '1px solid var(--term-border, #e0e3eb)',
                   alignSelf: 'flex-start',
                   marginBottom: '0.75rem'
                 }}>
@@ -2302,8 +2302,8 @@ export default function BacktestPage() {
                       flex: 1,
                       padding: '0.75rem 1rem',
                       borderRadius: '8px',
-                      background: engineType === 'python' ? 'rgba(0, 229, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                      border: engineType === 'python' ? '1px solid var(--accent)' : '1px solid rgba(255, 255, 255, 0.05)',
+                      background: engineType === 'python' ? 'rgba(41, 98, 255, 0.08)' : 'rgba(0, 0, 0, 0.02)',
+                      border: engineType === 'python' ? '1px solid var(--accent)' : '1px solid #e0e3eb',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       textAlign: 'left'
@@ -2323,8 +2323,8 @@ export default function BacktestPage() {
                       flex: 1,
                       padding: '0.75rem 1rem',
                       borderRadius: '8px',
-                      background: engineType === 'browser' ? 'rgba(0, 229, 255, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                      border: engineType === 'browser' ? '1px solid var(--accent)' : '1px solid rgba(255, 255, 255, 0.05)',
+                      background: engineType === 'browser' ? 'rgba(41, 98, 255, 0.08)' : 'rgba(0, 0, 0, 0.02)',
+                      border: engineType === 'browser' ? '1px solid var(--accent)' : '1px solid #e0e3eb',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
                       textAlign: 'left'
@@ -2423,10 +2423,10 @@ export default function BacktestPage() {
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            background: 'var(--term-input, #101014)',
+            background: 'var(--term-input, #f0f3fa)',
             padding: '2px',
             borderRadius: '6px',
-            border: '1px solid var(--term-border, rgba(255, 255, 255, 0.06))'
+            border: '1px solid var(--term-border, #e0e3eb)'
           }}>
             {TIMEFRAMES.map(tf => (
               <button
@@ -2484,7 +2484,7 @@ export default function BacktestPage() {
               title="Chart Display Settings"
               onClick={() => setIsSettingsOpen(true)}
               style={{
-                borderColor: isSettingsOpen ? 'var(--term-accent, #7c4dff)' : 'var(--term-border-strong)',
+                borderColor: isSettingsOpen ? 'var(--term-accent, #2962ff)' : 'var(--term-border-strong)',
                 background: isSettingsOpen ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
               }}
             >
@@ -2532,7 +2532,7 @@ export default function BacktestPage() {
             className={styles.topBarBtn}
             onClick={() => setIsGlobalNavCollapsed(!isGlobalNavCollapsed)}
             title={isGlobalNavCollapsed ? "Show main navigation header" : "Hide main navigation header"}
-            style={{ borderColor: isGlobalNavCollapsed ? 'rgba(0, 240, 255, 0.3)' : 'rgba(255,255,255,0.08)' }}
+            style={{ borderColor: isGlobalNavCollapsed ? 'rgba(41, 98, 255, 0.3)' : '#e0e3eb' }}
           >
             {isGlobalNavCollapsed ? '👁️ Show Nav' : '👁️ Hide Nav'}
           </button>
@@ -2622,7 +2622,7 @@ export default function BacktestPage() {
                 left: '60px',
                 zIndex: 1000,
                 background: 'rgba(30, 41, 59, 0.85)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                border: '1px solid #e0e3eb',
                 color: 'var(--accent)',
                 padding: '4px 10px',
                 borderRadius: '6px',
@@ -2650,7 +2650,7 @@ export default function BacktestPage() {
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              color: '#94a3b8',
+              color: '#787b86',
               background: 'radial-gradient(circle at 50% 50%, rgba(2, 132, 199, 0.08), rgba(7, 8, 10, 0))',
               border: '1px solid rgba(2, 132, 199, 0.1)',
               borderRadius: '12px',
@@ -2659,12 +2659,12 @@ export default function BacktestPage() {
               backdropFilter: 'blur(20px)'
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.25rem', maxWidth: '400px' }}>
-                <div style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 0 10px rgba(0, 229, 255, 0.3))' }}>🐍</div>
+                <div style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 0 10px rgba(41, 98, 255, 0.3))' }}>🐍</div>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent)' }}>Python Desktop Engine Active</h3>
                 <p style={{ fontSize: '0.82rem', opacity: 0.8, lineHeight: 1.5 }}>
                   The lightweight-charts interactive window is currently running on your desktop.
                 </p>
-                <div style={{ background: 'rgba(5, 6, 8, 0.6)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '0.75rem 1rem', width: '100%', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div style={{ background: 'rgba(0, 0, 0, 0.03)', border: '1px solid #e0e3eb', borderRadius: '8px', padding: '0.75rem 1rem', width: '100%', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Live Database Synced Progress:</div>
                   <div style={{ fontSize: '0.85rem', fontWeight: 'bold', fontFamily: 'monospace', color: '#10b981' }}>
                     Balance: {formatCurrency(balance)}
@@ -2884,14 +2884,14 @@ export default function BacktestPage() {
                 
                 <div className={styles.analysisStatRow}>
                   <span className={styles.analysisStatLabel}>Win rate</span>
-                  <span className={styles.analysisStatValue} style={{ color: stats.winRate >= 50 ? '#10b981' : '#fff' }}>
+                  <span className={styles.analysisStatValue} style={{ color: stats.winRate >= 50 ? '#089981' : 'var(--term-text)' }}>
                     {formatPercent(stats.winRate)} ({stats.winCount}W / {stats.lossCount}L)
                   </span>
                 </div>
                 
                 <div className={styles.analysisStatRow}>
                   <span className={styles.analysisStatLabel}>Profit factor</span>
-                  <span className={styles.analysisStatValue} style={{ color: stats.profitFactor >= 1.5 ? '#10b981' : stats.profitFactor > 0 && stats.profitFactor < 1 ? '#ef4444' : '#fff' }}>
+                  <span className={styles.analysisStatValue} style={{ color: stats.profitFactor >= 1.5 ? '#089981' : stats.profitFactor > 0 && stats.profitFactor < 1 ? '#f23645' : 'var(--term-text)' }}>
                     {stats.profitFactor === Infinity ? '∞' : stats.profitFactor.toFixed(2)}
                   </span>
                 </div>
@@ -2921,7 +2921,7 @@ export default function BacktestPage() {
 
                 <div className={styles.analysisStatRow}>
                   <span className={styles.analysisStatLabel}>Sharpe Ratio (Risk-free=0)</span>
-                  <span className={styles.analysisStatValue} style={{ color: calculateSharpeRatio(closedTrades.map(t => t.pnl ?? 0)) >= 1 ? '#10b981' : '#fff' }}>
+                  <span className={styles.analysisStatValue} style={{ color: calculateSharpeRatio(closedTrades.map(t => t.pnl ?? 0)) >= 1 ? '#089981' : 'var(--term-text)' }}>
                     {calculateSharpeRatio(closedTrades.map(t => t.pnl ?? 0)).toFixed(2)}
                   </span>
                 </div>
@@ -3062,14 +3062,14 @@ const EquityCurve = ({ history, width = 600, height = 160 }: { history: number[]
           y1={height - ((history[0] - yMin) / (yMax - yMin)) * (height - 30) - 15}
           x2={width - 20}
           y2={height - ((history[0] - yMin) / (yMax - yMin)) * (height - 30) - 15}
-          stroke="rgba(255, 255, 255, 0.08)"
+          stroke="rgba(0, 0, 0, 0.06)"
           strokeDasharray="4 4"
         />
       )}
 
       {/* Grid lines */}
-      <line x1={20} y1={15} x2={width - 20} y2={15} stroke="rgba(255, 255, 255, 0.03)" />
-      <line x1={20} y1={height - 15} x2={width - 20} y2={height - 15} stroke="rgba(255, 255, 255, 0.03)" />
+      <line x1={20} y1={15} x2={width - 20} y2={15} stroke="rgba(0, 0, 0, 0.03)" />
+      <line x1={20} y1={height - 15} x2={width - 20} y2={height - 15} stroke="rgba(0, 0, 0, 0.03)" />
 
       {/* Area under curve */}
       {areaD && <path d={areaD} fill="url(#equityGrad)" />}

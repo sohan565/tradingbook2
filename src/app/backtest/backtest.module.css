@@ -1,44 +1,42 @@
 /* ============================================
    TradingBook — Backtest Terminal
-   Intentionally dark, precision charting surface.
-   Neutral graphite palette · one indigo accent ·
+   TradingView-grade light theme surface.
+   Clean whites & grays · blue accent ·
    TradingView-grade up/down · no glow/gradient/blur.
    ============================================ */
 
-/* Scoped terminal palette — keeps the terminal a
-   coherent dark surface in BOTH site themes and makes
-   the global component overrides resolve to dark. */
+/* Scoped terminal palette — TradingView light theme */
 .backtestContainer,
 .mobileBacktestContainer {
-  --term-bg: #05060a;
-  --term-surface: #090b12;
-  --term-panel: #07080e;
-  --term-card: #0b0d14;
-  --term-card-hover: #10131d;
-  --term-input: #080a10;
-  --term-border: rgba(0, 229, 255, 0.09);
-  --term-border-strong: rgba(0, 229, 255, 0.20);
-  --term-text: #e8f6ff;
-  --term-text-2: #8fa3b8;
-  --term-text-3: #64788c;
-  --term-text-4: #45566a;
-  --term-accent: #00e5ff;
-  --term-accent-2: #5cf1ff;
-  --term-accent-soft: rgba(0, 229, 255, 0.12);
-  --term-accent-border: rgba(0, 229, 255, 0.32);
-  --term-up: #00ff9d;
-  --term-up-soft: rgba(0, 255, 157, 0.11);
-  --term-up-border: rgba(0, 255, 157, 0.30);
-  --term-down: #ff3b5c;
-  --term-down-soft: rgba(255, 59, 92, 0.11);
-  --term-down-border: rgba(255, 59, 92, 0.30);
+  --term-bg: #ffffff;
+  --term-surface: #f8f9fd;
+  --term-panel: #f0f3fa;
+  --term-card: #ffffff;
+  --term-card-hover: #f0f3fa;
+  --term-input: #f0f3fa;
+  --term-border: #e0e3eb;
+  --term-border-strong: #b2b5be;
+  --term-text: #131722;
+  --term-text-2: #4c525e;
+  --term-text-3: #787b86;
+  --term-text-4: #9598a1;
+  --term-accent: #2962ff;
+  --term-accent-2: #1e53e5;
+  --term-accent-soft: rgba(41, 98, 255, 0.08);
+  --term-accent-border: rgba(41, 98, 255, 0.25);
+  --term-up: #089981;
+  --term-up-soft: rgba(8, 153, 129, 0.08);
+  --term-up-border: rgba(8, 153, 129, 0.25);
+  --term-down: #f23645;
+  --term-down-soft: rgba(242, 54, 69, 0.08);
+  --term-down-border: rgba(242, 54, 69, 0.25);
 
-  /* Re-scope global tokens so [class*=wizardCard] overrides stay dark */
+  /* Re-scope global tokens for light theme consistency */
   --bg-card: var(--term-card);
   --bg-card-hover: var(--term-card-hover);
   --bg-input: var(--term-input);
-  --bg-input-focus: #17171d;
-  --bg-elevated: #17171d;
+  --bg-input-focus: #e8ebf2;
+  --bg-elevated: #f0f3fa;
   --text-primary: var(--term-text);
   --text-secondary: var(--term-text-2);
   --text-muted: var(--term-text-3);
@@ -46,7 +44,7 @@
   --border-subtle: var(--term-border);
   --accent: var(--term-accent);
   --accent-light: var(--term-accent-2);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 /* Base container — full viewport */
@@ -70,7 +68,7 @@
 .loadingOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(8, 8, 10, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -109,7 +107,7 @@
   border: 1px solid var(--term-border);
   border-radius: 16px;
   padding: 2.5rem 2.5rem 2rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 24px 56px -20px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 24px 56px -20px rgba(0, 0, 0, 0.12);
   position: relative;
   overflow: hidden;
   animation: wizardFadeIn 0.32s var(--ease-out, ease);
@@ -236,7 +234,7 @@
   border-color: var(--term-accent);
   box-shadow: 0 0 0 3px var(--term-accent-soft);
 }
-.wizardSelect option { background: #101014; color: var(--term-text); }
+.wizardSelect option { background: #ffffff; color: var(--term-text); }
 
 .symbolGrid {
   display: grid;
@@ -282,7 +280,7 @@
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--term-text-4);
-  background: rgba(255,255,255,0.04);
+  background: rgba(0,0,0,0.04);
   padding: 0.12rem 0.4rem;
   border-radius: 5px;
   margin-top: 0.1rem;
@@ -552,7 +550,7 @@
   cursor: pointer;
   transition: background 0.14s;
 }
-.resumeSessionBtn:hover { background: rgba(125,121,242,0.22); }
+.resumeSessionBtn:hover { background: rgba(41,98,255,0.12); }
 
 /* ============================================
    ACTIVE MODE — TOP BAR (compact, like TradingView)
@@ -616,7 +614,7 @@
   font-size: 0.72rem;
   font-weight: 550;
   color: var(--term-text-3);
-  background: rgba(255,255,255,0.03);
+  background: rgba(0,0,0,0.02);
   padding: 0.2rem 0.6rem;
   border-radius: 6px;
   border: 1px solid var(--term-border);
@@ -652,7 +650,7 @@
   padding: 4px 6px;
   border-radius: 6px;
 }
-.chartTypeSelect:hover { background: rgba(255,255,255,0.05); color: var(--term-text); }
+.chartTypeSelect:hover { background: rgba(0,0,0,0.04); color: var(--term-text); }
 
 /* Timeframe separator */
 .tfSep {
@@ -674,12 +672,12 @@
   transition: background 0.12s, color 0.12s;
   white-space: nowrap;
 }
-.timeframeBtn:hover { background: rgba(255,255,255,0.05); color: var(--term-text); }
+.timeframeBtn:hover { background: rgba(0,0,0,0.04); color: var(--term-text); }
 .activeTimeframe {
   background: var(--term-accent-soft);
   color: var(--term-accent-2);
 }
-.activeTimeframe:hover { background: rgba(125,121,242,0.2); color: var(--term-accent-2); }
+.activeTimeframe:hover { background: rgba(41,98,255,0.1); color: var(--term-accent-2); }
 
 .topBarDivider {
   width: 1px;
@@ -705,7 +703,7 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.topBarBtn:hover { background: rgba(255,255,255,0.05); color: var(--term-text); border-color: var(--term-text-4); }
+.topBarBtn:hover { background: rgba(0,0,0,0.04); color: var(--term-text); border-color: var(--term-text-4); }
 
 .indicatorsBtn {
   display: flex;
@@ -739,7 +737,7 @@
 }
 
 .manualSaveBtn {
-  background: rgba(255,255,255,0.04);
+  background: rgba(0,0,0,0.03);
   border: 1px solid var(--term-border-strong);
   color: var(--term-text-2);
   padding: 4px 10px;
@@ -750,7 +748,7 @@
   transition: background 0.12s;
   flex-shrink: 0;
 }
-.manualSaveBtn:hover { background: rgba(255,255,255,0.07); }
+.manualSaveBtn:hover { background: rgba(0,0,0,0.05); }
 .manualSaveBtnSuccess { color: var(--term-up); border-color: var(--term-up-border); }
 
 .endSessionBtn {
@@ -846,7 +844,7 @@
 .stepBtn {
   height: 34px;
   padding: 0 10px;
-  background: rgba(255,255,255,0.04);
+  background: rgba(0,0,0,0.03);
   border: 1px solid var(--term-border-strong);
   color: var(--term-text-2);
   border-radius: 8px;
@@ -859,7 +857,7 @@
   transition: background 0.12s, color 0.12s;
   white-space: nowrap;
 }
-.stepBtn:hover { background: rgba(255,255,255,0.07); color: var(--term-text); }
+.stepBtn:hover { background: rgba(0,0,0,0.05); color: var(--term-text); }
 
 .resetBtn {
   height: 34px;
@@ -881,7 +879,7 @@
 /* Progress bar for replay */
 .replayProgress {
   height: 4px;
-  background: rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.04);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -908,7 +906,7 @@
 .speedSelector {
   display: flex;
   gap: 2px;
-  background: rgba(0,0,0,0.35);
+  background: rgba(0,0,0,0.04);
   padding: 2px;
   border-radius: 7px;
 }
@@ -925,7 +923,7 @@
   transition: background 0.12s, color 0.12s;
 }
 .speedBtn:hover { color: var(--term-text-2); }
-.activeSpeed { background: rgba(255,255,255,0.08); color: var(--term-accent-2); }
+.activeSpeed { background: rgba(0,0,0,0.06); color: var(--term-accent-2); }
 
 /* Candle counter */
 .candleCounter {
@@ -1024,7 +1022,7 @@
 }
 
 .positionCard {
-  background: rgba(255,255,255,0.02);
+  background: rgba(0,0,0,0.02);
   border-left: 2px solid var(--term-accent);
   border-top: 1px solid var(--term-border);
   border-right: 1px solid var(--term-border);
@@ -1143,10 +1141,11 @@
   font-family: var(--font-mono);
   font-weight: 550;
   pointer-events: none;
-  background: rgba(10,10,12,0.82);
+  background: rgba(255,255,255,0.92);
   border: 1px solid var(--term-border);
   padding: 5px 12px;
   border-radius: 7px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .ohlcItem { color: var(--term-text-4); }
@@ -1239,7 +1238,7 @@
 }
 
 .bottomTable thead tr {
-  background: rgba(0,0,0,0.25);
+  background: rgba(0,0,0,0.03);
 }
 
 .bottomTable th {
@@ -1258,7 +1257,7 @@
   border-bottom: 1px solid var(--term-border);
   transition: background 0.1s;
 }
-.bottomTableRow:hover { background: rgba(255,255,255,0.025); }
+.bottomTableRow:hover { background: rgba(0,0,0,0.02); }
 
 .bottomTable td {
   padding: 5px 10px;
@@ -1333,8 +1332,8 @@
 /* Scrollbar styling */
 .backtestContainer ::-webkit-scrollbar { width: 8px; height: 8px; }
 .backtestContainer ::-webkit-scrollbar-track { background: transparent; }
-.backtestContainer ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.09); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
-.backtestContainer ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); background-clip: padding-box; }
+.backtestContainer ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.09); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+.backtestContainer ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.16); background-clip: padding-box; }
 
 /* ============================================
    RESPONSIVE — single breakpoint at 768px
@@ -1447,7 +1446,7 @@
     transform: translateX(-100%);
     transition: transform var(--t-normal);
     box-shadow: none;
-    background: var(--term-panel, #0d0f1a);
+    background: var(--term-panel, #f0f3fa);
     border-right: 1px solid var(--term-border);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -1456,14 +1455,14 @@
 
   .tradePanel.orderPanelOpen {
     transform: translateX(0);
-    box-shadow: var(--shadow-xl, 0 4px 24px rgba(0,0,0,0.5));
+    box-shadow: var(--shadow-xl, 0 4px 24px rgba(0,0,0,0.12));
   }
 
   /* Slide-over backdrop */
   .orderPanelOverlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.15);
     z-index: 499;
     opacity: 0;
     pointer-events: none;
@@ -1564,7 +1563,7 @@
     width: 36px;
     height: 4px;
     border-radius: 2px;
-    background: var(--term-text-4, rgba(255,255,255,0.2));
+    background: var(--term-text-4, rgba(0,0,0,0.15));
   }
 
   .tabsHeader {
@@ -1646,7 +1645,7 @@
 }
 
 .timezoneSelect {
-  background: rgba(10, 10, 12, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   border: 1px solid var(--term-border-strong);
   color: var(--term-text-2);
   font-size: 0.72rem;
@@ -1659,7 +1658,7 @@
 }
 
 .timezoneSelect:hover {
-  background: rgba(10, 10, 12, 1);
+  background: #ffffff;
   border-color: var(--term-accent-border);
   color: var(--term-accent-2);
 }
@@ -1719,8 +1718,8 @@
   cursor: pointer;
   padding: 3px 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid #e0e3eb;
   font-family: monospace;
   font-size: 0.8rem;
   line-height: 1.3;
@@ -1733,33 +1732,33 @@
   justify-content: center;
 }
 .editableField:hover {
-  background: rgba(125, 121, 242, 0.15);
-  border-color: var(--term-accent, #7d79f2);
-  color: var(--term-accent-light, #8f8bf5);
-  box-shadow: 0 0 0 1px rgba(125, 121, 242, 0.2);
+  background: rgba(41, 98, 255, 0.08);
+  border-color: var(--term-accent, #2962ff);
+  color: var(--term-accent-light, #1e53e5);
+  box-shadow: 0 0 0 1px rgba(41, 98, 255, 0.15);
 }
 .editableField:active {
-  background: rgba(125, 121, 242, 0.25);
+  background: rgba(41, 98, 255, 0.12);
   transform: scale(0.98);
 }
 
 .smallPriceInput {
   width: 85px;
-  background: rgba(13, 16, 37, 0.95);
-  border: 1px solid var(--term-accent, #7d79f2);
+  background: #f0f3fa;
+  border: 1px solid var(--term-accent, #2962ff);
   border-radius: 4px;
-  color: #fff;
+  color: #131722;
   padding: 3px 8px;
   font-family: monospace;
   font-size: 0.8rem;
   outline: none;
-  box-shadow: 0 0 0 2px rgba(125, 121, 242, 0.25);
+  box-shadow: 0 0 0 2px rgba(41, 98, 255, 0.15);
   -moz-appearance: textfield;
   appearance: textfield;
 }
 .smallPriceInput:focus {
-  border-color: var(--term-accent-light, #8f8bf5);
-  box-shadow: 0 0 0 3px rgba(125, 121, 242, 0.35);
+  border-color: var(--term-accent-light, #1e53e5);
+  box-shadow: 0 0 0 3px rgba(41, 98, 255, 0.2);
 }
 .smallPriceInput::-webkit-outer-spin-button,
 .smallPriceInput::-webkit-inner-spin-button {
@@ -1773,12 +1772,12 @@
   right: 0;
   margin-top: 6px;
   width: 180px;
-  background: rgba(10, 14, 23, 0.96);
+  background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(12px);
-  border: 1px solid var(--term-border, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--term-border, #e0e3eb);
   border-radius: 8px;
   padding: 8px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.05);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 1px 1px rgba(0, 0, 0, 0.04);
   z-index: 1100;
   display: flex;
   flex-direction: column;
@@ -1807,7 +1806,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid #e0e3eb;
   padding-top: 6px;
 }
 
@@ -1815,18 +1814,18 @@
   display: flex;
   justify-content: space-between;
   font-size: 0.72rem;
-  color: var(--text-secondary, #94a3b8);
+  color: var(--text-secondary, #787b86);
   font-weight: 600;
 }
 
 .percentSlider {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.06);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
-  accent-color: var(--term-accent, #7d79f2);
+  accent-color: var(--term-accent, #2962ff);
   margin: 4px 0;
 }
 
@@ -1837,9 +1836,9 @@
 
 .presetBtn {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: var(--text-secondary, #94a3b8);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid #e0e3eb;
+  color: var(--text-secondary, #787b86);
   border-radius: 4px;
   padding: 2px 0;
   font-size: 0.7rem;
@@ -1847,14 +1846,14 @@
   transition: all 0.1s;
 }
 .presetBtn:hover {
-  background: rgba(125, 121, 242, 0.15);
-  border-color: var(--term-accent, #7d79f2);
-  color: #fff;
+  background: rgba(41, 98, 255, 0.08);
+  border-color: var(--term-accent, #2962ff);
+  color: var(--term-text);
 }
 
 .confirmCloseBtn {
   width: 100%;
-  background: linear-gradient(135deg, #7d79f2 0%, #6d5ef9 100%);
+  background: linear-gradient(135deg, #2962ff 0%, #1e53e5 100%);
   border: none;
   border-radius: 6px;
   color: #fff;
@@ -1863,7 +1862,7 @@
   font-weight: 700;
   cursor: pointer;
   transition: opacity 0.12s;
-  box-shadow: 0 4px 12px rgba(109, 94, 249, 0.2);
+  box-shadow: 0 4px 12px rgba(41, 98, 255, 0.2);
 }
 .confirmCloseBtn:hover {
   opacity: 0.9;
@@ -1881,10 +1880,10 @@
 .fsToggleBtn {
   position: absolute;
   z-index: 25000;
-  background: rgba(10, 14, 23, 0.85);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #a9a9b3;
+  border: 1px solid #e0e3eb;
+  color: #787b86;
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 0.78rem;
@@ -1893,15 +1892,15 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: all 0.15s ease;
 }
 
 .fsToggleBtn:hover {
-  background: rgba(10, 14, 23, 0.95);
-  border-color: var(--term-accent, #7d79f2);
-  color: #ffffff;
-  box-shadow: 0 4px 20px rgba(125, 121, 242, 0.2);
+  background: #ffffff;
+  border-color: var(--term-accent, #2962ff);
+  color: #131722;
+  box-shadow: 0 2px 12px rgba(41, 98, 255, 0.12);
 }
 
 .fsReplayToggle {
@@ -1920,12 +1919,12 @@
   right: 0;
   z-index: 30000;
   width: 220px;
-  background: rgba(10, 14, 23, 0.88);
+  background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #e0e3eb;
   border-radius: 8px;
   padding: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -1937,7 +1936,7 @@
   letter-spacing: 0.05em;
   color: var(--term-text-4, #7a7a85);
   font-weight: 700;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid #e0e3eb;
   padding-bottom: 6px;
   margin-bottom: 4px;
 }
@@ -1946,7 +1945,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--term-text-2, #a9a9b3);
+  color: var(--term-text-2, #4c525e);
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
@@ -1955,11 +1954,11 @@
 }
 
 .settingsDropdownItem:hover {
-  color: var(--term-text, #ffffff);
+  color: var(--term-text, #131722);
 }
 
 .settingsDropdownItem input[type="checkbox"] {
-  accent-color: var(--term-accent, #7d79f2);
+  accent-color: var(--term-accent, #2962ff);
   width: 14px;
   height: 14px;
   cursor: pointer;
