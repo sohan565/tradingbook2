@@ -160,9 +160,9 @@ Tone: Analytical, constructive, motivating, and professional.
     });
 
     const GEMINI_MODELS = [
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-thinking-exp',
       'gemini-2.0-pro-exp',
+      'gemini-2.0-flash-thinking-exp',
+      'gemini-2.0-flash',
       'gemini-1.5-flash'
     ];
 

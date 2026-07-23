@@ -103,8 +103,8 @@ Keep this performance profile in mind when responding to all questions. Make you
     let lastErrorMsg = '';
 
     const MODELS_TO_TRY = [
-      "google/gemini-2.0-flash-001",
       "google/gemini-2.0-flash-thinking-exp:free",
+      "google/gemini-2.0-flash-001",
       "google/gemini-2.0-pro-exp-02-05:free",
       "google/gemini-2.5-flash:free",
       "qwen/qwen3-coder:free",
