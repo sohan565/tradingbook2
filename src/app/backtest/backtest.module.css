@@ -679,7 +679,7 @@
   background: var(--term-accent-soft);
   color: var(--term-accent-2);
 }
-.activeTimeframe:hover { background: rgba(125,121,242,0.2); color: var(--term-accent-2); }
+.activeTimeframe:hover { background: rgba(0, 229, 255, 0.22); color: var(--term-accent-2); }
 
 .topBarDivider {
   width: 1px;

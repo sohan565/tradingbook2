@@ -2423,10 +2423,10 @@ export default function BacktestPage() {
             display: 'flex',
             alignItems: 'center',
             gap: '2px',
-            background: 'var(--term-input, #101014)',
+            background: 'var(--term-input, #080a10)',
             padding: '2px',
             borderRadius: '6px',
-            border: '1px solid var(--term-border, rgba(255, 255, 255, 0.06))'
+            border: '1px solid var(--term-border, rgba(255, 255, 255, 0.08))'
           }}>
             {TIMEFRAMES.map(tf => (
               <button
@@ -2438,8 +2438,8 @@ export default function BacktestPage() {
                   borderRadius: '4px',
                   fontSize: '0.78rem',
                   fontWeight: timeframe === tf.key ? '600' : '500',
-                  color: timeframe === tf.key ? 'var(--term-text, #ffffff)' : 'var(--term-text-3, #7a7a85)',
-                  background: timeframe === tf.key ? 'var(--term-card, #1c1c24)' : 'transparent',
+                  color: timeframe === tf.key ? '#ffffff' : 'var(--term-text-3, #8fa3b8)',
+                  background: timeframe === tf.key ? 'var(--term-accent, #2962ff)' : 'transparent',
                   border: 'none',
                   transition: 'all 0.1s ease',
                 }}
@@ -2484,8 +2484,8 @@ export default function BacktestPage() {
               title="Chart Display Settings"
               onClick={() => setIsSettingsOpen(true)}
               style={{
-                borderColor: isSettingsOpen ? 'var(--term-accent, #7c4dff)' : 'var(--term-border-strong)',
-                background: isSettingsOpen ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
+                borderColor: isSettingsOpen ? 'var(--term-accent, #2962ff)' : 'rgba(255, 255, 255, 0.12)',
+                background: isSettingsOpen ? 'rgba(41, 98, 255, 0.12)' : 'rgba(255, 255, 255, 0.04)',
               }}
             >
               ⚙️ settings
@@ -2532,7 +2532,7 @@ export default function BacktestPage() {
             className={styles.topBarBtn}
             onClick={() => setIsGlobalNavCollapsed(!isGlobalNavCollapsed)}
             title={isGlobalNavCollapsed ? "Show main navigation header" : "Hide main navigation header"}
-            style={{ borderColor: isGlobalNavCollapsed ? 'rgba(0, 240, 255, 0.3)' : 'rgba(255,255,255,0.08)' }}
+            style={{ borderColor: isGlobalNavCollapsed ? 'rgba(41, 98, 255, 0.3)' : 'rgba(255,255,255,0.1)' }}
           >
             {isGlobalNavCollapsed ? '👁️ Show Nav' : '👁️ Hide Nav'}
           </button>

@@ -200,9 +200,9 @@ export default function Select({
           fontWeight: 500,
           fontFamily: 'var(--font-sans)',
           textAlign: 'left',
-          color: disabled ? 'var(--text-disabled)' : 'var(--text-primary)',
-          background: 'var(--bg-input)',
-          border: '1px solid var(--border-default)',
+          color: disabled ? 'var(--text-disabled)' : 'var(--term-text, var(--text-primary))',
+          background: 'var(--term-input, var(--bg-input))',
+          border: '1px solid var(--term-border, var(--border-default))',
           borderRadius: 'var(--radius-md)',
           cursor: disabled ? 'not-allowed' : 'pointer',
           transition: 'border-color var(--t-fast)',
@@ -219,7 +219,7 @@ export default function Select({
           aria-hidden="true"
           style={{
             flexShrink: 0,
-            color: 'var(--text-muted)',
+            color: 'var(--term-text-3, var(--text-muted))',
             transform: open ? 'rotate(180deg)' : 'none',
             transition: 'transform var(--t-fast)',
           }}
@@ -247,8 +247,8 @@ export default function Select({
             margin: 0,
             padding: '0.3rem',
             listStyle: 'none',
-            background: 'var(--bg-elevated)',
-            border: '1px solid var(--border-default)',
+            background: 'var(--term-card, var(--bg-elevated))',
+            border: '1px solid var(--term-border, var(--border-default))',
             borderRadius: 'var(--radius-md)',
             boxShadow: 'var(--shadow-lg)',
           }}
