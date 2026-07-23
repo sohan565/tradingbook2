@@ -99,77 +99,81 @@ Keep this performance profile in mind when responding to all questions. Make you
       });
     }
 
-    // 4. Try calling NVIDIA API first, fallback to OpenRouter free models
     let response: Response | null = null;
     let lastErrorMsg = '';
 
-    try {
-      console.log(`[AI Coach] Trying NVIDIA API with nemotron-3-super-120b-a12b`);
-      const nvResponse = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.NVIDIA_API_KEY || ''}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "nvidia/nemotron-3-super-120b-a12b",
-          messages: messages,
-          temperature: 1,
-          top_p: 0.95,
-          chat_template_kwargs: { enable_thinking: true },
-          reasoning_budget: 16384
-        })
-      });
+    const MODELS_TO_TRY = [
+      "google/gemini-2.0-flash-001",
+      "google/gemini-2.0-flash-thinking-exp:free",
+      "google/gemini-2.0-pro-exp-02-05:free",
+      "google/gemini-2.5-flash:free",
+      "qwen/qwen3-coder:free",
+      "meta-llama/llama-3.3-70b-instruct:free"
+    ];
 
-      if (nvResponse.ok) {
-        response = nvResponse;
-        console.log(`[AI Coach] NVIDIA NIM response successful!`);
-      } else {
-        const nvErrText = await nvResponse.text();
-        console.warn(`[AI Coach] NVIDIA API failed: ${nvErrText}`);
-        lastErrorMsg = `NVIDIA API failed (${nvResponse.status}): ${nvErrText}`;
+    // 1. Try Gemini models & OpenRouter first for maximum efficiency and speed
+    for (const modelName of MODELS_TO_TRY) {
+      try {
+        console.log(`[AI Coach] Trying primary model: ${modelName}`);
+        const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            "model": modelName,
+            "messages": messages,
+            reasoning: modelName.includes('thinking') || modelName.includes('qwen') ? { enabled: true } : undefined
+          })
+        });
+
+        if (res.ok) {
+          response = res;
+          console.log(`[AI Coach] Model ${modelName} response successful!`);
+          break;
+        } else {
+          const errText = await res.text();
+          console.warn(`[AI Coach] Model ${modelName} failed with status ${res.status}: ${errText}`);
+          lastErrorMsg = errText;
+        }
+      } catch (err: any) {
+        console.warn(`[AI Coach] Fetch error on model ${modelName}:`, err);
+        lastErrorMsg = err.message || err;
       }
-    } catch (nvErr: any) {
-      console.warn(`[AI Coach] NVIDIA API fetch error:`, nvErr);
-      lastErrorMsg = `NVIDIA API fetch error: ${nvErr.message || nvErr}`;
     }
 
-    // If NVIDIA failed, loop through fallback OpenRouter models
-    if (!response) {
-      console.log(`[AI Coach] Falling back to OpenRouter free models...`);
-      const MODELS_TO_TRY = [
-        "qwen/qwen3-coder:free",
-        "google/gemini-2.5-flash:free",
-        "meta-llama/llama-3.3-70b-instruct:free"
-      ];
+    // 2. If Gemini/OpenRouter fails, try NVIDIA NIM as high-capacity fallback
+    if (!response && process.env.NVIDIA_API_KEY) {
+      try {
+        console.log(`[AI Coach] Trying NVIDIA NIM API fallback with nemotron-3-super-120b-a12b`);
+        const nvResponse = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.NVIDIA_API_KEY || ''}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "nvidia/nemotron-3-super-120b-a12b",
+            messages: messages,
+            temperature: 1,
+            top_p: 0.95,
+            chat_template_kwargs: { enable_thinking: true },
+            reasoning_budget: 16384
+          })
+        });
 
-      for (const modelName of MODELS_TO_TRY) {
-        try {
-          console.log(`[AI Coach] Trying OpenRouter model: ${modelName}`);
-          const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${apiKey}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              "model": modelName,
-              "messages": messages
-            })
-          });
-
-          if (res.ok) {
-            response = res;
-            break;
-          } else {
-            const errText = await res.text();
-            console.warn(`[AI Coach] OpenRouter Model ${modelName} failed with status ${res.status}: ${errText}`);
-            lastErrorMsg = `OpenRouter API error (${res.status}) on model ${modelName}: ${errText}`;
-          }
-        } catch (err: any) {
-          console.warn(`[AI Coach] OpenRouter fetch error on model ${modelName}:`, err);
-          lastErrorMsg = `Fetch error on model ${modelName}: ${err.message || err}`;
+        if (nvResponse.ok) {
+          response = nvResponse;
+          console.log(`[AI Coach] NVIDIA NIM response successful!`);
+        } else {
+          const nvErrText = await nvResponse.text();
+          console.warn(`[AI Coach] NVIDIA API failed: ${nvErrText}`);
+          lastErrorMsg = `NVIDIA API failed (${nvResponse.status}): ${nvErrText}`;
         }
+      } catch (nvErr: any) {
+        console.warn(`[AI Coach] NVIDIA API fetch error:`, nvErr);
+        lastErrorMsg = `NVIDIA API fetch error: ${nvErr.message || nvErr}`;
       }
     }
 

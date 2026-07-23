@@ -159,25 +159,49 @@ Tone: Analytical, constructive, motivating, and professional.
       parts: [{ text: `${contextText}\n\nUser Question: ${message}` }]
     });
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const GEMINI_MODELS = [
+      'gemini-2.0-flash',
+      'gemini-2.0-flash-thinking-exp',
+      'gemini-2.0-pro-exp',
+      'gemini-1.5-flash'
+    ];
 
-    const response = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: systemInstruction }]
-        },
-        contents: formattedContents,
-      }),
-    });
+    let response: Response | null = null;
+    let lastErrText = '';
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('[Gemini Coach API Error]:', errText);
-      return NextResponse.json({ success: false, error: `Gemini API Error: ${response.statusText}` }, { status: response.status });
+    for (const modelName of GEMINI_MODELS) {
+      try {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const res = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [{ text: systemInstruction }]
+            },
+            contents: formattedContents,
+          }),
+        });
+
+        if (res.ok) {
+          response = res;
+          console.log(`[Backtest Coach] Model ${modelName} response successful!`);
+          break;
+        } else {
+          lastErrText = await res.text();
+          console.warn(`[Backtest Coach] Model ${modelName} failed with status ${res.status}: ${lastErrText}`);
+        }
+      } catch (err: any) {
+        console.warn(`[Backtest Coach] Fetch error on ${modelName}:`, err);
+        lastErrText = err.message || String(err);
+      }
+    }
+
+    if (!response) {
+      console.error('[Gemini Coach API Error]:', lastErrText);
+      return NextResponse.json({ success: false, error: `Gemini API Error: ${lastErrText}` }, { status: 500 });
     }
 
     const resultJson = await response.json();
