@@ -67,6 +67,38 @@ export default function AiCoachCard({ stats, recentTrades, sourceName }: AiCoach
   const [isGeneratingAi, setIsGeneratingAi] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Load saved chat history on mount
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('tradingbook_analytics_ai_chat_history');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setChatMessages(parsed);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load saved analytics AI chat history:', e);
+    }
+  }, []);
+
+  // Save chat messages to localStorage whenever chatMessages updates
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        if (chatMessages.length > 0) {
+          localStorage.setItem('tradingbook_analytics_ai_chat_history', JSON.stringify(chatMessages));
+        } else {
+          localStorage.removeItem('tradingbook_analytics_ai_chat_history');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to save analytics AI chat history:', e);
+    }
+  }, [chatMessages]);
+
   // Scroll chat window to bottom
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -145,7 +177,12 @@ export default function AiCoachCard({ stats, recentTrades, sourceName }: AiCoach
         </div>
         <button
           className={styles.generateBtn}
-          onClick={chatMessages.length > 0 ? () => { setChatMessages([]); } : handleGenerateAiInsights}
+          onClick={chatMessages.length > 0 ? () => { 
+            setChatMessages([]); 
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('tradingbook_analytics_ai_chat_history');
+            }
+          } : handleGenerateAiInsights}
           disabled={isGeneratingAi && chatMessages.length === 0}
         >
           {isGeneratingAi && chatMessages.length === 0 ? (

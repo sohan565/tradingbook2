@@ -18,10 +18,55 @@ export default function CoachTab({ backtestRecordId }: CoachTabProps) {
   const [coachLoading, setCoachLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Default initial greeting
+  const DEFAULT_GREETING: ChatMessage = {
+    role: 'assistant',
+    content: 'Welcome to your AI Trading Coach. Ask me anything about your trades, mistakes, setups, or sessions in this project!'
+  };
+
+  // Load chat history from localStorage on mount / record change
+  useEffect(() => {
+    if (!backtestRecordId || typeof window === 'undefined') return;
+    try {
+      const key = `tradingbook_backtest_coach_history_${backtestRecordId}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setChatMessages(parsed);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load backtest coach history:', e);
+    }
+  }, [backtestRecordId]);
+
+  // Save chat history to localStorage whenever chatMessages changes
+  useEffect(() => {
+    if (!backtestRecordId || typeof window === 'undefined') return;
+    try {
+      const key = `tradingbook_backtest_coach_history_${backtestRecordId}`;
+      if (chatMessages.length > 1 || (chatMessages.length === 1 && chatMessages[0].content !== DEFAULT_GREETING.content)) {
+        localStorage.setItem(key, JSON.stringify(chatMessages));
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch (e) {
+      console.error('Failed to save backtest coach history:', e);
+    }
+  }, [chatMessages, backtestRecordId]);
+
   // Keep the newest message in view
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [chatMessages, coachLoading]);
+
+  const handleClearChat = () => {
+    setChatMessages([DEFAULT_GREETING]);
+    if (backtestRecordId && typeof window !== 'undefined') {
+      localStorage.removeItem(`tradingbook_backtest_coach_history_${backtestRecordId}`);
+    }
+  };
 
   // AI Performance Coach Chat Trigger
   const handleSendCoachMessage = async (overridePrompt?: string) => {
@@ -73,7 +118,27 @@ export default function CoachTab({ backtestRecordId }: CoachTabProps) {
 
   return (
     <div>
-      <h1 className={styles.tabTitle}>AI Performance Coach</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h1 className={styles.tabTitle} style={{ margin: 0 }}>AI Performance Coach</h1>
+        {chatMessages.length > 1 && (
+          <button
+            onClick={handleClearChat}
+            style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              color: '#ef4444',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 0.15s'
+            }}
+          >
+            🗑️ Clear Chat
+          </button>
+        )}
+      </div>
 
       <div className={styles.coachWrapper}>
         <div className={styles.coachMessages}>

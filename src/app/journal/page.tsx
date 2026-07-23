@@ -172,8 +172,31 @@ export default function JournalPage() {
       const stored = localStorage.getItem('gemini_api_key') || '';
       setClientApiKey(stored);
       setKeyInputTemp(stored);
+
+      try {
+        const savedChat = localStorage.getItem('tradingbook_journal_ai_chat_history');
+        if (savedChat) {
+          const parsed = JSON.parse(savedChat);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAssistantMessages(parsed);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load saved journal AI chat history:', err);
+      }
     }
   }, []);
+
+  // Save chat messages to localStorage whenever assistantMessages updates
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (assistantMessages.length > 0) {
+        localStorage.setItem('tradingbook_journal_ai_chat_history', JSON.stringify(assistantMessages));
+      } else {
+        localStorage.removeItem('tradingbook_journal_ai_chat_history');
+      }
+    }
+  }, [assistantMessages]);
 
   // Scroll to bottom when messages or loading state changes
   useEffect(() => {
@@ -810,7 +833,12 @@ export default function JournalPage() {
                       <div className={styles.chatInputActions}>
                         <button 
                           className={styles.clearChatBtn}
-                          onClick={() => setAssistantMessages([])}
+                          onClick={() => {
+                            setAssistantMessages([]);
+                            if (typeof window !== 'undefined') {
+                              localStorage.removeItem('tradingbook_journal_ai_chat_history');
+                            }
+                          }}
                           title="Clear Chat History"
                         >
                           🗑️ Clear
