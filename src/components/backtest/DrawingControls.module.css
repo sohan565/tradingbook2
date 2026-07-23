@@ -5,10 +5,10 @@
 /* --- 1. Context Menu (Floating Popup) --- */
 .contextMenu {
   position: absolute;
-  background: #ffffff;
-  border: 1px solid #e0e3eb;
+  background: #16161b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   padding: 4px 0;
   z-index: 10000;
   min-width: 170px;
@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px;
-  color: #787b86;
+  color: #94a3b8;
   font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.1s ease;
@@ -30,8 +30,8 @@
 }
 
 .menuItem:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #131722;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f1f5f9;
 }
 
 .menuItemLabel {
@@ -57,7 +57,7 @@
 
 .menuDivider {
   height: 1px;
-  background: #e0e3eb;
+  background: rgba(255, 255, 255, 0.06);
   margin: 4px 0;
 }
 
@@ -71,10 +71,10 @@
   position: absolute;
   left: 100%;
   top: -4px;
-  background: #ffffff;
-  border: 1px solid #e0e3eb;
+  background: #16161b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   padding: 4px 0;
   min-width: 130px;
 }
@@ -88,10 +88,10 @@
   position: absolute;
   display: flex;
   align-items: center;
-  background: #ffffff;
-  border: 1px solid #e0e3eb;
+  background: #16161b;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 6px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
   padding: 4px 6px;
   z-index: 9999;
   gap: 2px;
@@ -120,7 +120,7 @@
 .toolbarDivider {
   width: 1px;
   height: 18px;
-  background: #e0e3eb;
+  background: rgba(255, 255, 255, 0.08);
   margin: 0 4px;
 }
 
@@ -132,15 +132,15 @@
   height: 28px;
   background: transparent;
   border: none;
-  color: #787b86;
+  color: #94a3b8;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.12s ease;
 }
 
 .toolbarBtn:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #131722;
+  background: rgba(255, 255, 255, 0.07);
+  color: #f1f5f9;
 }
 
 .toolbarBtnActive {
@@ -156,7 +156,7 @@
   width: 18px;
   height: 18px;
   border-radius: 3px;
-  border: 1.5px solid #b2b5be;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
   cursor: pointer;
 }
 
@@ -170,10 +170,10 @@
   left: 50%;
   transform: translateX(-50%);
   margin-top: 6px;
-  background: #ffffff;
-  border: 1px solid #e0e3eb;
+  background: #17171d;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 6px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   padding: 6px;
   z-index: 10001;
   display: flex;
@@ -193,7 +193,7 @@
   height: 18px;
   border-radius: 50%;
   cursor: pointer;
-  border: 1px solid #e0e3eb;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: transform 0.1s ease;
 }
 .paletteColor:hover {
@@ -206,15 +206,15 @@
   justify-content: center;
   padding: 4px 12px;
   font-size: 0.72rem;
-  color: #787b86;
+  color: #94a3b8;
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.1s;
   white-space: nowrap;
 }
 .widthOption:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #131722;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
 }
 .widthOptionActive {
   background: rgba(125, 121, 242, 0.16);
@@ -227,7 +227,7 @@
   align-items: center;
   padding: 6px 12px;
   font-size: 0.72rem;
-  color: #787b86;
+  color: #94a3b8;
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.1s;
@@ -235,15 +235,15 @@
   gap: 8px;
 }
 .styleOption:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #131722;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
 }
 
 /* --- 3. Settings Modal --- */
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -255,9 +255,9 @@
   width: 100%;
   max-width: 440px;
   background: var(--bg-secondary);
-  border: 1px solid #e0e3eb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -269,13 +269,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-bottom: 1px solid #e0e3eb;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .modalHeaderTitle {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #131722;
+  color: #f1f5f9;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -294,13 +294,13 @@
   justify-content: center;
 }
 .modalCloseBtn:hover {
-  color: #131722;
+  color: #f1f5f9;
 }
 
 .modalTabs {
   display: flex;
-  border-bottom: 1px solid #e0e3eb;
-  background: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .modalTab {
@@ -315,7 +315,7 @@
   transition: all 0.12s;
 }
 .modalTab:hover {
-  color: #787b86;
+  color: #94a3b8;
 }
 .modalTabActive {
   color: var(--accent, var(--accent-light));
@@ -345,7 +345,7 @@
 
 .settingsLabel {
   font-size: 0.8rem;
-  color: #787b86;
+  color: #94a3b8;
   font-weight: 500;
 }
 
@@ -356,9 +356,9 @@
 }
 
 .modalInput {
-  background: #ffffff;
-  border: 1px solid #e0e3eb;
-  color: #131722;
+  background: #101014;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
   border-radius: 4px;
   padding: 6px 10px;
   font-size: 0.8rem;
@@ -370,9 +370,9 @@
 }
 
 .modalSelect {
-  background: #ffffff;
-  border: 1px solid #e0e3eb;
-  color: #131722;
+  background: #101014;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
   border-radius: 4px;
   padding: 6px 8px;
   font-size: 0.8rem;
@@ -395,7 +395,7 @@
   align-items: center;
   gap: 8px;
   font-size: 0.8rem;
-  color: #787b86;
+  color: #94a3b8;
   cursor: pointer;
 }
 .visibilityItem input {
@@ -408,8 +408,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  border-top: 1px solid #e0e3eb;
-  background: rgba(0, 0, 0, 0.03);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .footerActions {
@@ -428,18 +428,18 @@
 
 .cancelBtn {
   background: transparent;
-  border: 1px solid #e0e3eb;
-  color: #787b86;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
 }
 .cancelBtn:hover {
-  background: rgba(0, 0, 0, 0.03);
-  color: #131722;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f1f5f9;
 }
 
 .saveBtn {
   background: var(--accent, var(--accent-light));
   border: none;
-  color: #ffffff;
+  color: #07080a;
 }
 .saveBtn:hover {
   opacity: 0.88;

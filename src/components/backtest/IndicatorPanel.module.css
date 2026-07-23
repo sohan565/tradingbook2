@@ -12,7 +12,7 @@
 }
 
 .modal {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(13, 14, 18, 0.95);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   width: 90%;
@@ -123,7 +123,7 @@
 }
 
 .indicatorCard {
-  background: rgba(0, 0, 0, 0.02);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 12px;
@@ -138,7 +138,7 @@
 }
 
 .indicatorCard:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.05);
   border-color: var(--accent);
 }
 
@@ -197,7 +197,7 @@
 }
 
 .activeCard {
-  background: rgba(0, 0, 0, 0.02);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 12px 16px;
@@ -255,7 +255,7 @@
 }
 
 .actionBtn:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .deleteBtn:hover {
@@ -300,7 +300,7 @@
 .configInput {
   width: 80px;
   height: 28px;
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-default);
   border-radius: 4px;
   color: var(--text-primary);
@@ -332,7 +332,7 @@
 .colorText {
   width: 80px;
   height: 28px;
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-default);
   border-radius: 4px;
   color: var(--text-primary);
