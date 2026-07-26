@@ -653,7 +653,6 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
         pathDef.defaultStyle = {
           ...pathDef.defaultStyle,
           lineColor: '#000000',
-          color: '#000000',
         };
       }
       const longDef = registry.get('long-position');
@@ -1186,7 +1185,6 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
             const pathStyle = {
               ...definition.defaultStyle,
               lineColor: '#000000',
-              color: '#000000',
             };
             const tempDrawing = registry.createDrawing(
               'path',
@@ -1301,7 +1299,6 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
             const pathStyle = {
               ...definition.defaultStyle,
               lineColor: '#000000',
-              color: '#000000',
             };
             const drawing = registry.createDrawing(
               'path',
