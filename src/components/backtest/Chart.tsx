@@ -48,6 +48,58 @@ import {
   type SerializedDrawing,
 } from 'lightweight-charts-drawing';
 
+function timeToLogicalHelper(
+  t: number,
+  timeScale: any,
+  candles: CandleData[],
+  timeframe?: string
+): number | null {
+  if (!timeScale) return null;
+  const coord = timeScale.timeToCoordinate(t as any);
+  if (coord !== null) {
+    const l = timeScale.coordinateToLogical(coord);
+    if (l !== null) return l;
+  }
+  if (candles && candles.length > 0) {
+    const lastCandle = candles[candles.length - 1];
+    const lastCoord = timeScale.timeToCoordinate(lastCandle.time as any);
+    const lastLogical = lastCoord !== null 
+      ? timeScale.coordinateToLogical(lastCoord)
+      : candles.length - 1;
+    if (lastLogical !== null) {
+      const tfSecs = (TIMEFRAME_SECONDS as any)[timeframe || '15m'] || 900;
+      return lastLogical + Math.round((t - (lastCandle.time as number)) / tfSecs);
+    }
+  }
+  return null;
+}
+
+function logicalToTimeHelper(
+  l: number,
+  timeScale: any,
+  candles: CandleData[],
+  timeframe?: string
+): number | null {
+  if (!timeScale) return null;
+  const coord = timeScale.logicalToCoordinate(l as any);
+  if (coord !== null) {
+    const time = timeScale.coordinateToTime(coord);
+    if (time !== null) return time as number;
+  }
+  if (candles && candles.length > 0) {
+    const lastCandle = candles[candles.length - 1];
+    const lastCoord = timeScale.timeToCoordinate(lastCandle.time as any);
+    const lastLogical = lastCoord !== null 
+      ? timeScale.coordinateToLogical(lastCoord)
+      : candles.length - 1;
+    if (lastLogical !== null) {
+      const tfSecs = (TIMEFRAME_SECONDS as any)[timeframe || '15m'] || 900;
+      return (lastCandle.time as number) + Math.round(l - lastLogical) * tfSecs;
+    }
+  }
+  return null;
+}
+
 // Import Technical Indicators from lightweight-charts-indicators
 import * as Ind from 'lightweight-charts-indicators';
 
@@ -532,6 +584,17 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
   const onJumpToBarRef = useRef<((timestamp: number) => void) | undefined>(onJumpToBar);
   const onSelectToolRef = useRef<((tool: string | null) => void) | undefined>(onSelectTool);
 
+  const candlesRef = useRef<CandleData[]>(candles);
+  const timeframeRef = useRef<string | undefined>(timeframe);
+
+  useEffect(() => {
+    candlesRef.current = candles;
+  }, [candles]);
+
+  useEffect(() => {
+    timeframeRef.current = timeframe;
+  }, [timeframe]);
+
   // Helper to perform snapping of anchors to closest candle OHLC / rounding
   const performSnapping = (drawing: any, candlesData: CandleData[]) => {
     const snapMode = drawing.options?.snapMode; // 'high-low' | 'ohlc' | 'round' | null
@@ -655,16 +718,91 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
           lineColor: '#000000',
         };
       }
+
+      // Patch anchorToPixel and pixelToAnchor across ALL drawing tools to enable drawing/dragging in horizontal free space
+      const allToolKeys = [
+        'trend-line',
+        'ray-line',
+        'arrow-line',
+        'extended-line',
+        'horizontal-line',
+        'vertical-line',
+        'fib-retracement',
+        'rectangle',
+        'triangle',
+        'brush',
+        'text-annotation',
+        'path',
+        'date-price-range',
+        'long-position',
+        'short-position',
+      ];
+
+      const patchedPrototypes = new Set<any>();
+
+      allToolKeys.forEach((key) => {
+        const def = registry.get(key);
+        if (!def || !def.factory) return;
+        try {
+          const dummy = def.factory('dummy_' + key, [], {}, {});
+          if (!dummy) return;
+          const proto = Object.getPrototypeOf(dummy);
+          if (!proto || patchedPrototypes.has(proto)) return;
+          patchedPrototypes.add(proto);
+
+          const origAnchorToPixel = proto.anchorToPixel;
+          proto.anchorToPixel = function(anchor: any, viewport: any) {
+            if (!anchor || !viewport) return null;
+            let res = origAnchorToPixel ? origAnchorToPixel.call(this, anchor, viewport) : null;
+            if (!res || res.x === null || res.x === undefined || isNaN(res.x)) {
+              const timeScale = viewport.timeScale || chartRef.current?.timeScale();
+              if (timeScale && anchor.time !== undefined) {
+                const logical = timeToLogicalHelper(anchor.time as number, timeScale, candlesRef.current, timeframeRef.current);
+                if (logical !== null) {
+                  const x = timeScale.logicalToCoordinate(logical as any);
+                  const series = this.series || candleSeriesRef.current;
+                  const y = series ? series.priceToCoordinate(anchor.price) : (res ? res.y : null);
+                  if (x !== null && y !== null) {
+                    return { x, y };
+                  }
+                }
+              }
+            }
+            return res;
+          };
+
+          const origPixelToAnchor = proto.pixelToAnchor;
+          proto.pixelToAnchor = function(pixel: any, viewport: any) {
+            if (!pixel || !viewport) return null;
+            let anchor = origPixelToAnchor ? origPixelToAnchor.call(this, pixel, viewport) : null;
+            if (!anchor || anchor.time === undefined || anchor.time === null) {
+              const timeScale = viewport.timeScale || chartRef.current?.timeScale();
+              if (timeScale && pixel.x !== undefined) {
+                const logical = timeScale.coordinateToLogical(pixel.x);
+                if (logical !== null) {
+                  const time = logicalToTimeHelper(logical, timeScale, candlesRef.current, timeframeRef.current);
+                  const series = this.series || candleSeriesRef.current;
+                  const price = series ? series.coordinateToPrice(pixel.y) : null;
+                  if (time !== null && price !== null) {
+                    return { time, price };
+                  }
+                }
+              }
+            }
+            return anchor;
+          };
+        } catch (err) {
+          // Ignore dummy creation edge cases
+        }
+      });
+
       const longDef = registry.get('long-position');
       const shortDef = registry.get('short-position');
-      console.log('[PrototypeOverrides] longDef:', longDef, 'shortDef:', shortDef);
 
       const overridePrototypes = (definition: any) => {
         if (!definition || !definition.factory) {
-          console.warn('[PrototypeOverrides] Definition or factory missing for:', definition);
           return;
         }
-        // Instantiate a dummy to get prototype references with safe arguments
         const dummy = definition.factory('dummy_id', [], {}, {});
         const DrawingProto = Object.getPrototypeOf(dummy);
         console.log('[PrototypeOverrides] Patching DrawingProto:', DrawingProto);
@@ -1445,11 +1583,17 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
       }
       // Update preview drawing anchors if a preview is active
       const toolType = activeToolRef.current;
-      if (toolType && previewDrawingRef.current && param.point && param.time !== undefined) {
+      if (toolType && previewDrawingRef.current && param.point) {
         let price = candleSeries.coordinateToPrice(param.point.y);
-        const time = param.time;
+        let time = param.time;
+        if (time === undefined && param.point) {
+          const logicalIndex = chart.timeScale().coordinateToLogical(param.point.x);
+          if (logicalIndex !== null) {
+            time = logicalToTimeHelper(logicalIndex, chart.timeScale(), candlesRef.current, timeframeRef.current) as any;
+          }
+        }
 
-        if (price !== null) {
+        if (price !== null && time !== undefined && time !== null) {
           // Snap price to closest candle OHLC if magnet mode is enabled
           if (isMagnetModeRef.current) {
             const candleData = param.seriesData.get(candleSeries) as any;
