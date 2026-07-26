@@ -648,6 +648,14 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
     // Run prototype overrides once to lock Long / Short Position tool width to price/time coordinates
     try {
       const registry = getToolRegistry();
+      const pathDef = registry.get('path');
+      if (pathDef) {
+        pathDef.defaultStyle = {
+          ...pathDef.defaultStyle,
+          lineColor: '#000000',
+          color: '#000000',
+        };
+      }
       const longDef = registry.get('long-position');
       const shortDef = registry.get('short-position');
       console.log('[PrototypeOverrides] longDef:', longDef, 'shortDef:', shortDef);
@@ -1175,11 +1183,16 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
 
         if (nextAnchors.length === 1) {
           try {
+            const pathStyle = {
+              ...definition.defaultStyle,
+              lineColor: '#000000',
+              color: '#000000',
+            };
             const tempDrawing = registry.createDrawing(
               'path',
               'preview',
               [{ time, price }, { time, price }],
-              definition.defaultStyle,
+              pathStyle,
               { ...definition.defaultOptions, closed: false } as any
             );
             if (tempDrawing) {
@@ -1285,11 +1298,16 @@ export default forwardRef<ChartRef, ChartProps>(function Chart({
             }
 
             console.log(`[Drawing] Finalizing path drawing with ${finalAnchors.length} anchors`);
+            const pathStyle = {
+              ...definition.defaultStyle,
+              lineColor: '#000000',
+              color: '#000000',
+            };
             const drawing = registry.createDrawing(
               'path',
               crypto.randomUUID(),
               finalAnchors,
-              definition.defaultStyle,
+              pathStyle,
               definition.defaultOptions
             );
             if (drawing) {

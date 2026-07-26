@@ -5,6 +5,7 @@ import styles from './DrawingControls.module.css';
 
 // Pre-defined color palette matching TradingBook dark neon theme
 const COLOR_PALETTE = [
+  '#000000', // Black
   '#00e5ff', // Cyan (Accent)
   '#00e676', // Neon Green (Profit/Long)
   '#ff3d00', // Neon Red (Loss/Short)
@@ -214,7 +215,7 @@ export const DrawingFloatingToolbar: React.FC<FloatingToolbarProps> = ({
     window.addEventListener('pointerup', handlePointerUp);
   };
 
-  const strokeColor = drawing.style?.lineColor || '#00e5ff';
+  const strokeColor = drawing.style?.lineColor || (drawing.type === 'path' ? '#000000' : '#00e5ff');
   const strokeWidth = drawing.style?.lineWidth || 1;
   const strokeStyle = getLineStyleLabel(drawing.style?.lineDash);
   const isLocked = !!drawing.options?.locked;
@@ -383,10 +384,10 @@ export const DrawingSettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<'style' | 'visibility'>('style');
 
   // Form styles state
-  const [lineColor, setLineColor] = useState(drawing.style?.lineColor || '#00e5ff');
+  const [lineColor, setLineColor] = useState(drawing.style?.lineColor || (drawing.type === 'path' ? '#000000' : '#00e5ff'));
   const [lineWidth, setLineWidth] = useState(drawing.style?.lineWidth || 1);
   const [lineStyle, setLineStyle] = useState(getLineStyleLabel(drawing.style?.lineDash));
-  const [fillColor, setFillColor] = useState(drawing.style?.fillColor || '#00e5ff');
+  const [fillColor, setFillColor] = useState(drawing.style?.fillColor || (drawing.type === 'path' ? '#000000' : '#00e5ff'));
   const [fillOpacity, setFillOpacity] = useState(drawing.style?.fillOpacity !== undefined ? drawing.style.fillOpacity : 0.2);
   const [showLabels, setShowLabels] = useState(!!drawing.style?.showLabels);
   
@@ -408,10 +409,10 @@ export const DrawingSettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (drawing) {
       const timer = setTimeout(() => {
-        setLineColor(drawing.style?.lineColor || '#00e5ff');
+        setLineColor(drawing.style?.lineColor || (drawing.type === 'path' ? '#000000' : '#00e5ff'));
         setLineWidth(drawing.style?.lineWidth || 1);
         setLineStyle(getLineStyleLabel(drawing.style?.lineDash));
-        setFillColor(drawing.style?.fillColor || '#00e5ff');
+        setFillColor(drawing.style?.fillColor || (drawing.type === 'path' ? '#000000' : '#00e5ff'));
         setFillOpacity(drawing.style?.fillOpacity !== undefined ? drawing.style.fillOpacity : 0.2);
         setShowLabels(!!drawing.style?.showLabels);
         setTextVal(drawing.options?.text || drawing.style?.text || '');
